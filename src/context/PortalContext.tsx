@@ -266,42 +266,6 @@ const INITIAL_USER_ACCOUNTS: UserAccount[] = [
     telegram: '@admin_devops',
     rank: 1,
   },
-  {
-    id: 'USR-STU-01',
-    name: 'John Smith',
-    email: 'student@devopspro.tech',
-    role: 'student',
-    registeredAt: '2026-08-01',
-    unlockedLessonsCount: 1,
-    completedLessonsCount: 0,
-    completedLabsCount: 0,
-    passedQuizCount: 0,
-    attendancePct: 100,
-    status: 'Active',
-    group: 'Группа 1 (Август 2026)',
-    totalPoints: 0,
-    phone: '+992 90 000 00 00',
-    telegram: '@student_devops',
-    rank: 1,
-  },
-  {
-    id: 'USR-STU-02',
-    name: 'Mullojon Rustamov',
-    email: 'mullojon@devopspro.tech',
-    role: 'student',
-    registeredAt: '2026-08-01',
-    unlockedLessonsCount: 1,
-    completedLessonsCount: 0,
-    completedLabsCount: 0,
-    passedQuizCount: 0,
-    attendancePct: 100,
-    status: 'Active',
-    group: 'Группа 1 (Август 2026)',
-    totalPoints: 0,
-    phone: '+992 91 123 45 67',
-    telegram: '@mullojon_devops',
-    rank: 2,
-  },
 ];
 
 const PortalContext = createContext<PortalContextType | undefined>(undefined);
@@ -356,6 +320,10 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           return {
             ...DEFAULT_PROFILE,
             ...parsed,
+            name: parsed.name || DEFAULT_PROFILE.name || '',
+            email: parsed.email || DEFAULT_PROFILE.email || '',
+            phone: parsed.phone || DEFAULT_PROFILE.phone || '',
+            telegram: parsed.telegram || DEFAULT_PROFILE.telegram || '',
             avatarUrl: parsed.avatarUrl || studentAvatarSvg,
             isAuthenticated: true,
           };
@@ -380,20 +348,25 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // 4. Lessons & Labs Data
   const [lessons, setLessons] = useState<LessonData[]>(() => {
     try {
-      const saved = localStorage.getItem('devops_lessons');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return INITIAL_LESSONS.map((initLesson) => {
-            const cached = parsed.find((p: any) => Number(p.id) === initLesson.id);
-            if (!cached) return initLesson;
-            return {
-              ...initLesson,
-              isCompleted: Boolean(cached.isCompleted),
-              submissionStatus: cached.submissionStatus || initLesson.submissionStatus,
-              completedAt: cached.completedAt || initLesson.completedAt,
-            };
-          });
+      const savedAuth = localStorage.getItem('devops_auth_profile');
+      const authObj = savedAuth ? JSON.parse(savedAuth) : null;
+      const email = (authObj?.email || '').toLowerCase().trim();
+      if (email) {
+        const saved = localStorage.getItem(`devops_lessons_${email}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return INITIAL_LESSONS.map((initLesson) => {
+              const cached = parsed.find((p: any) => Number(p.id) === initLesson.id);
+              if (!cached) return initLesson;
+              return {
+                ...initLesson,
+                isCompleted: Boolean(cached.isCompleted),
+                submissionStatus: cached.submissionStatus || initLesson.submissionStatus,
+                completedAt: cached.completedAt || initLesson.completedAt,
+              };
+            });
+          }
         }
       }
     } catch {}
@@ -442,6 +415,9 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (role === 'admin') {
         return Array.from({ length: 24 }, (_, i) => i + 1);
       }
+      if (!currentEmail) {
+        return [1];
+      }
       const savedHwRaw = localStorage.getItem('devops_homework_submissions');
       const savedHw: any[] = savedHwRaw ? JSON.parse(savedHwRaw) : INITIAL_HOMEWORK_SUBMISSIONS;
       const approvedHwIds = Array.isArray(savedHw)
@@ -450,8 +426,7 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               (h) =>
                 h &&
                 h.status === 'Approved' &&
-                (!currentEmail ||
-                  (h.studentEmail && String(h.studentEmail).toLowerCase().trim() === currentEmail) ||
+                ((h.studentEmail && String(h.studentEmail).toLowerCase().trim() === currentEmail) ||
                   (currentId && h.studentId === currentId))
             )
             .map((h) => Number(h.lessonId))
@@ -466,8 +441,13 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // 6. Read sections & Progress
   const [readSections, setReadSections] = useState<Record<string, boolean>>(() => {
     try {
-      const saved = localStorage.getItem('devops_read_sections');
-      if (saved) return JSON.parse(saved);
+      const savedAuth = localStorage.getItem('devops_auth_profile');
+      const authObj = savedAuth ? JSON.parse(savedAuth) : null;
+      const email = (authObj?.email || '').toLowerCase().trim();
+      if (email) {
+        const saved = localStorage.getItem(`devops_read_sections_${email}`);
+        if (saved) return JSON.parse(saved);
+      }
     } catch {}
     return {};
   });
@@ -475,8 +455,13 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // 7. Test Scores & Quizzes
   const [testScores, setTestScores] = useState<Record<string, any>>(() => {
     try {
-      const saved = localStorage.getItem('devops_test_scores');
-      if (saved) return JSON.parse(saved);
+      const savedAuth = localStorage.getItem('devops_auth_profile');
+      const authObj = savedAuth ? JSON.parse(savedAuth) : null;
+      const email = (authObj?.email || '').toLowerCase().trim();
+      if (email) {
+        const saved = localStorage.getItem(`devops_test_scores_${email}`);
+        if (saved) return JSON.parse(saved);
+      }
     } catch {}
     return {};
   });
@@ -601,15 +586,12 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   useEffect(() => {
     try {
-      localStorage.setItem('devops_lessons', JSON.stringify(lessons));
+      const email = (profile.email || '').toLowerCase().trim();
+      if (profile.isAuthenticated && email) {
+        localStorage.setItem(`devops_labs_${email}`, JSON.stringify(labs));
+      }
     } catch {}
-  }, [lessons]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('devops_labs', JSON.stringify(labs));
-    } catch {}
-  }, [labs]);
+  }, [labs, profile.isAuthenticated, profile.email]);
 
   // Enforce lesson unlocking based strictly on role and Mentor-confirmed (Approved) homework
   useEffect(() => {
@@ -669,16 +651,31 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Dynamically unlock badges based on real lesson/quiz/lab completion
   useEffect(() => {
+    const currentEmail = (profile?.email || '').toLowerCase().trim();
+    const currentId = profile?.id ? String(profile.id) : '';
+
+    if (!profile.isAuthenticated || !currentEmail) {
+      setBadges((prev) => {
+        if (prev.every((b) => !b.unlocked)) return prev;
+        return INITIAL_BADGES.map((b) => ({ ...b, unlocked: false, unlockedAt: undefined }));
+      });
+      return;
+    }
+
     const completedIds = new Set(lessons.filter((l) => l.isCompleted).map((l) => l.id));
     const passedLesson1Quiz =
       Boolean(testScores['1'] && Number(testScores['1']) >= 60) ||
       Boolean(testScores['lesson-1-test'] && Number(testScores['lesson-1-test']) >= 60) ||
       Boolean(testScores['LESSON_1'] && Number(testScores['LESSON_1']) >= 60) ||
-      quizSubmissions.some(
-        (q) =>
-          (q.quizId === '1' || q.quizId === 'lesson-1-test' || q.quizId === 'LESSON_1') &&
-          (q.passed || q.scorePct >= 60)
-      );
+      quizSubmissions.some((q) => {
+        const matches =
+          q.quizId === '1' || q.quizId === 'lesson-1-test' || q.quizId === 'LESSON_1';
+        if (!matches) return false;
+        const qEmail = (q.studentEmail || '').toLowerCase().trim();
+        const qId = q.studentId ? String(q.studentId) : '';
+        const isMy = (currentEmail && qEmail === currentEmail) || (currentId && qId === currentId);
+        return isMy && (q.passed === true || (typeof q.scorePct === 'number' && q.scorePct >= 60));
+      });
 
     setBadges((prev) => {
       let changed = false;
@@ -714,25 +711,54 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
       return changed ? next : prev;
     });
-  }, [lessons, testScores, quizSubmissions]);
+  }, [lessons, testScores, quizSubmissions, profile.isAuthenticated, profile.email, profile.id]);
+
+  // Cleanup stale legacy unscoped keys on mount
+  useEffect(() => {
+    try {
+      localStorage.removeItem('devops_read_sections');
+      localStorage.removeItem('devops_unlocked_lessons');
+      localStorage.removeItem('devops_test_scores');
+      localStorage.removeItem('devops_lessons');
+      localStorage.removeItem('devops_badges');
+    } catch {}
+  }, []);
 
   useEffect(() => {
     try {
-      localStorage.setItem('devops_read_sections', JSON.stringify(readSections));
+      const email = (profile.email || '').toLowerCase().trim();
+      if (profile.isAuthenticated && email) {
+        localStorage.setItem(`devops_read_sections_${email}`, JSON.stringify(readSections));
+      }
     } catch {}
-  }, [readSections]);
+  }, [readSections, profile.isAuthenticated, profile.email]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('devops_unlocked_lessons', JSON.stringify(unlockedLessonIds));
+      const email = (profile.email || '').toLowerCase().trim();
+      if (profile.isAuthenticated && email) {
+        localStorage.setItem(`devops_unlocked_lessons_${email}`, JSON.stringify(unlockedLessonIds));
+      }
     } catch {}
-  }, [unlockedLessonIds]);
+  }, [unlockedLessonIds, profile.isAuthenticated, profile.email]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('devops_test_scores', JSON.stringify(testScores));
+      const email = (profile.email || '').toLowerCase().trim();
+      if (profile.isAuthenticated && email) {
+        localStorage.setItem(`devops_test_scores_${email}`, JSON.stringify(testScores));
+      }
     } catch {}
-  }, [testScores]);
+  }, [testScores, profile.isAuthenticated, profile.email]);
+
+  useEffect(() => {
+    try {
+      const email = (profile.email || '').toLowerCase().trim();
+      if (profile.isAuthenticated && email) {
+        localStorage.setItem(`devops_lessons_${email}`, JSON.stringify(lessons));
+      }
+    } catch {}
+  }, [lessons, profile.isAuthenticated, profile.email]);
 
   useEffect(() => {
     try {
@@ -1065,15 +1091,19 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const mapped: UserAccount[] = studentList.map((s: any) => {
           const role = s.role || 'student';
           const sEmail = String(s.email || '').toLowerCase().trim();
-          const studentApprovedHwLessons = hwList
-            .filter(
-              (h: any) =>
-                String(h.status || h.submissionStatus || '').toLowerCase() === 'approved' &&
-                (String(h.studentEmail || h.student_email || '').toLowerCase().trim() === sEmail ||
-                  (s.id && (h.studentId === s.id || h.student_id === s.id)))
+          const studentApprovedHwLessons = Array.from(
+            new Set(
+              hwList
+                .filter(
+                  (h: any) =>
+                    String(h.status || h.submissionStatus || '').toLowerCase() === 'approved' &&
+                    (String(h.studentEmail || h.student_email || '').toLowerCase().trim() === sEmail ||
+                      (s.id && (h.studentId === s.id || h.student_id === s.id)))
+                )
+                .map((h: any) => Number(h.lessonId ?? h.lesson_id ?? 0))
+                .filter((n: number) => n >= 1 && n <= 24)
             )
-            .map((h: any) => Number(h.lessonId ?? h.lesson_id ?? 0))
-            .filter((n: number) => n >= 1 && n <= 24);
+          );
 
           const maxApprovedHwLesson = studentApprovedHwLessons.length > 0 ? Math.max(...studentApprovedHwLessons) : 0;
           const completedCount = studentApprovedHwLessons.length;
@@ -1105,6 +1135,9 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           };
         });
         setUserAccounts(mapped);
+        try {
+          localStorage.setItem('devops_user_accounts', JSON.stringify(mapped));
+        } catch {}
 
         // Sync active student's profile, unlocked lessons, completed lessons, and read sections
         const activeAccount = mapped.find(
@@ -1123,11 +1156,7 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             ? userProgress.flatReadSections
             : {}),
         };
-        if (Object.keys(serverSections).length > 0) {
-          setReadSections((prev) => ({ ...prev, ...serverSections }));
-        } else if (myQuizzes.length === 0 && hwList.length === 0 && labList.length === 0) {
-          setReadSections({});
-        }
+        setReadSections(serverSections || {});
 
         const myApprovedHwLessons = hwList
           .filter(
@@ -1139,7 +1168,10 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           .map((h: any) => Number(h.lessonId ?? h.lesson_id ?? 0))
           .filter((n: number) => n >= 1 && n <= 24);
 
-        const allCompletedLessonIds = new Set<number>(myApprovedHwLessons);
+        const allCompletedLessonIds = new Set<number>([
+          ...myApprovedHwLessons,
+          ...(userProgress?.completedLessons || []).map(Number).filter((n: number) => n >= 1 && n <= 24),
+        ]);
 
         const myLabSubs = labList.filter(
           (l: any) =>
@@ -1197,13 +1229,16 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           })
         );
 
-        setLessons((prev) =>
-          prev.map((l) => ({
-            ...l,
-            isCompleted: allCompletedLessonIds.has(l.id),
-            submissionStatus: allCompletedLessonIds.has(l.id) ? 'Approved' : l.submissionStatus,
-            completedAt: allCompletedLessonIds.has(l.id) ? l.completedAt || new Date().toISOString() : undefined,
-          }))
+        setLessons(
+          INITIAL_LESSONS.map((l) => {
+            const isComp = allCompletedLessonIds.has(l.id);
+            return {
+              ...l,
+              isCompleted: isComp,
+              submissionStatus: isComp ? 'Approved' : 'Not Submitted',
+              completedAt: isComp ? new Date().toISOString() : undefined,
+            };
+          })
         );
 
         if (activeAccount && profile.role !== 'admin') {
@@ -1331,14 +1366,71 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [xpBreakdown.totalXp, profile.totalPoints, profile.email, profile.id]);
 
   const stats = useMemo(() => {
+    const currentEmail = (profile?.email || '').toLowerCase().trim();
+    const currentId = profile?.id ? String(profile.id) : '';
+
     const completedLessonsCount = lessons.filter((l) => l.isCompleted).length;
     const completedLabsCount = labs.filter((l) => l.isCompleted || (l as any).submissionStatus === 'Approved').length;
-    const submittedHomeworkCount = homeworkSubmissions.filter(
-      (h) => h.status === 'Approved' || h.status === 'Submitted'
-    ).length;
-    const passedTestsCount = Object.values(testScores).filter(
-      (s: any) => s && (s.passed || (typeof s === 'number' && s >= 60) || s.scorePct >= 60)
-    ).length;
+
+    // Distinct lesson IDs (1..24) where this active student submitted/completed homework
+    const mySubmittedHwLessonIds = new Set<number>();
+    homeworkSubmissions.forEach((h: any) => {
+      if (!h) return;
+      const hEmail = String(h.studentEmail || (h as any).student_email || '').toLowerCase().trim();
+      const hId = h.studentId ? String(h.studentId) : '';
+      const hasOwner = Boolean(hEmail || hId);
+      const isMine = hasOwner
+        ? (Boolean(currentEmail && hEmail === currentEmail) || Boolean(currentId && hId === currentId))
+        : (!currentEmail && !currentId);
+      const st = String(h.status || (h as any).submissionStatus || '').toLowerCase();
+      const isDone = st === 'approved' || st === 'submitted';
+      const lid = Number(h.lessonId ?? (h as any).lesson_id);
+      if (isMine && isDone && !isNaN(lid) && lid >= 1 && lid <= 24) {
+        mySubmittedHwLessonIds.add(lid);
+      }
+    });
+    const submittedHomeworkCount = mySubmittedHwLessonIds.size;
+
+    const myPassedTests = new Set<string>();
+    Object.entries(testScores).forEach(([k, s]: [string, any]) => {
+      if (!s) return;
+      const isPassed = s && (s.passed === true || (typeof s === 'number' && s >= 60) || (typeof s.scorePct === 'number' && s.scorePct >= 60));
+      if (!isPassed) return;
+      const scoreEmail = typeof s === 'object' ? String(s.studentEmail || '').toLowerCase().trim() : '';
+      const scoreStudentId = typeof s === 'object' ? String(s.studentId || '').trim() : '';
+      const hasOwner = Boolean(scoreEmail || scoreStudentId);
+      const isMine = hasOwner
+        ? (Boolean(currentEmail && scoreEmail === currentEmail) || Boolean(currentId && scoreStudentId === currentId))
+        : true;
+      if (isMine) {
+        const m = String(k).match(/^(?:lesson-)?(\d+)(?:-test)?$/i) || String(k).match(/^LESSON_(\d+)$/i);
+        if (m) {
+          myPassedTests.add(`lesson_${m[1]}`);
+        } else {
+          myPassedTests.add(k);
+        }
+      }
+    });
+    quizSubmissions.forEach((q: any) => {
+      if (!q) return;
+      const qEmail = String(q.studentEmail || '').toLowerCase().trim();
+      const qId = q.studentId ? String(q.studentId) : '';
+      const hasOwner = Boolean(qEmail || qId);
+      const isMine = hasOwner
+        ? (Boolean(currentEmail && qEmail === currentEmail) || Boolean(currentId && qId === currentId))
+        : (!currentEmail && !currentId);
+      const isPassed = q.passed === true || (typeof q.scorePct === 'number' && q.scorePct >= 60);
+      if (isMine && isPassed) {
+        const m = String(q.quizId).match(/^(?:lesson-)?(\d+)(?:-test)?$/i) || String(q.quizId).match(/^LESSON_(\d+)$/i);
+        if (m) {
+          myPassedTests.add(`lesson_${m[1]}`);
+        } else {
+          myPassedTests.add(q.quizId);
+        }
+      }
+    });
+    const passedTestsCount = myPassedTests.size;
+
     const attendancePct = profile.attendancePct !== undefined ? profile.attendancePct : 100;
     const progressPct = Math.round((completedLessonsCount / 24) * 100);
 
@@ -1372,7 +1464,7 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       academicScore: calculatedTotalAcademic,
       ...academicScoreObj,
     };
-  }, [lessons, labs, homeworkSubmissions, testScores, labSubmissions, profile, xpBreakdown.totalXp]);
+  }, [lessons, labs, homeworkSubmissions, testScores, labSubmissions, quizSubmissions, profile, xpBreakdown.totalXp]);
 
   const leaderboard: LeaderboardUser[] = useMemo(() => {
     try {
@@ -2508,43 +2600,61 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     setUserAccounts((prev) => {
       const idx = prev.findIndex((u) => u.email.toLowerCase() === fullAccount.email.toLowerCase());
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = { ...copy[idx], ...fullAccount };
-        return copy;
-      }
-      return [...prev, fullAccount];
+      const next = idx >= 0 ? [...prev] : [...prev, fullAccount];
+      if (idx >= 0) next[idx] = { ...next[idx], ...fullAccount };
+      try {
+        localStorage.setItem('devops_user_accounts', JSON.stringify(next));
+      } catch {}
+      return next;
     });
 
     try {
       await api.adminCreateStudent(fullAccount);
+      await refreshDatabase();
     } catch (e) {
-      console.warn('API create student fallback:', e);
+      console.warn('API create student error:', e);
     }
-  }, []);
+  }, [refreshDatabase]);
 
   const updateUserAccount = useCallback(async (id: string, updates: Partial<UserAccount>) => {
-    setUserAccounts((prev) =>
-      prev.map((u) => (u.id === id || (updates.email && u.email.toLowerCase() === updates.email.toLowerCase()) ? { ...u, ...updates } : u))
-    );
+    setUserAccounts((prev) => {
+      const next = prev.map((u) => (u.id === id || (updates.email && u.email.toLowerCase() === updates.email.toLowerCase()) ? { ...u, ...updates } : u));
+      try {
+        localStorage.setItem('devops_user_accounts', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
     try {
       await api.adminUpdateStudent(id, updates);
+      await refreshDatabase();
     } catch (e) {
-      console.warn('API update student fallback:', e);
+      console.warn('API update student error:', e);
     }
-  }, []);
+  }, [refreshDatabase]);
 
   const deleteUserAccount = useCallback(
     async (id: string) => {
-      const user = userAccounts.find((u) => u.id === id);
-      setUserAccounts((prev) => prev.filter((u) => u.id !== id));
+      const user = userAccounts.find((u) => u.id === id || (u.email && u.email.toLowerCase() === id.toLowerCase()));
+      const targetEmail = user?.email || (id.includes('@') ? id : undefined);
+      setUserAccounts((prev) => {
+        const next = prev.filter(
+          (u) =>
+            u.id !== id &&
+            (targetEmail ? u.email.toLowerCase() !== targetEmail.toLowerCase() : true)
+        );
+        try {
+          localStorage.setItem('devops_user_accounts', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
       try {
-        await api.deleteUser(id, user?.email);
+        await api.deleteUser(id, targetEmail);
+        await refreshDatabase();
       } catch (e) {
-        console.warn('API delete user fallback:', e);
+        console.warn('API delete user error:', e);
       }
     },
-    [userAccounts]
+    [userAccounts, refreshDatabase]
   );
 
   const toggleBadgeForUser = useCallback((userEmail: string, badgeId: string) => {
@@ -2638,9 +2748,22 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   );
 
   const loginStudent = useCallback((userData: any) => {
+    // Reset student transient state immediately before loading new user
+    setLessons(INITIAL_LESSONS);
+    setLabs(INITIAL_LABS);
+    setReadSections({});
+    setTestScores({});
+    setQuizRetakes({});
+    setBadges(INITIAL_BADGES.map((b) => ({ ...b, unlocked: false, unlockedAt: undefined })));
+
     const newProfile: StudentProfileData = {
       ...DEFAULT_PROFILE,
       ...userData,
+      name: userData?.name || DEFAULT_PROFILE.name || '',
+      email: userData?.email || DEFAULT_PROFILE.email || '',
+      phone: userData?.phone || DEFAULT_PROFILE.phone || '',
+      telegram: userData?.telegram || DEFAULT_PROFILE.telegram || '',
+      avatarUrl: userData?.avatarUrl || studentAvatarSvg,
       isAuthenticated: true,
     };
     setProfile(newProfile);
@@ -2658,10 +2781,24 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       localStorage.removeItem('devops_auth_token');
       localStorage.removeItem('devops_auth_profile');
       localStorage.removeItem('devops_active_page');
+      localStorage.removeItem('devops_read_sections');
+      localStorage.removeItem('devops_unlocked_lessons');
+      localStorage.removeItem('devops_test_scores');
+      localStorage.removeItem('devops_quiz_retakes');
+      localStorage.removeItem('devops_lessons');
+      localStorage.removeItem('devops_labs');
+      localStorage.removeItem('devops_badges');
       if (profile.email) {
         api.logout(profile.email).catch(() => {});
       }
     } catch {}
+    setLessons(INITIAL_LESSONS);
+    setLabs(INITIAL_LABS);
+    setReadSections({});
+    setTestScores({});
+    setQuizRetakes({});
+    setUnlockedLessonIds([1]);
+    setBadges(INITIAL_BADGES.map((b) => ({ ...b, unlocked: false, unlockedAt: undefined })));
     setProfile(DEFAULT_PROFILE);
     setActivePage('login');
   }, [profile.email]);

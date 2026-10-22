@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { apiRouter } from './server/apiRouter';
-import { initDatabase, migrateAndSyncDatabase } from './server/db';
+import { initDatabase, migrateAndSyncDatabase, restoreAttachmentFileToDisk } from './server/db';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -94,6 +94,20 @@ async function startServer() {
       }
     }
   };
+
+  // Automatic file recovery: if an attachment file is missing on disk (e.g. after container recreation or restore),
+  // pull the binary BLOB directly from SQLite attachments table and write it to disk cache before serving
+  const uploadFallbackHandler = (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    try {
+      const subPath = req.path ? req.path.replace(/^\/+/, '') : '';
+      if (subPath) {
+        restoreAttachmentFileToDisk(subPath);
+        restoreAttachmentFileToDisk(`uploads/${subPath}`);
+      }
+    } catch {}
+    next();
+  };
+  app.use(['/uploads', '/ai/api/uploads', '/admin/api/uploads', '/api/uploads'], uploadFallbackHandler);
   app.use('/uploads', express.static(uploadsDir, uploadsStaticOptions));
   app.use('/ai/api/uploads', express.static(uploadsDir, uploadsStaticOptions));
   app.use('/admin/api/uploads', express.static(uploadsDir, uploadsStaticOptions));

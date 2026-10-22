@@ -265,7 +265,7 @@ export const LoginPage: React.FC = () => {
                   <input
                     type="text"
                     required
-                    value={username}
+                    value={username ?? ''}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="student@devopspro.tech"
                     className="w-full bg-[#0D0D12] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
@@ -283,7 +283,7 @@ export const LoginPage: React.FC = () => {
                   <input
                     type="password"
                     required
-                    value={password}
+                    value={password ?? ''}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     className="w-full bg-[#0D0D12] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
@@ -331,7 +331,7 @@ export const LoginPage: React.FC = () => {
                   <input
                     type="text"
                     required
-                    value={regName}
+                    value={regName ?? ''}
                     onChange={(e) => setRegName(e.target.value)}
                     placeholder="Муллоджон Кобилов"
                     className="w-full bg-[#0D0D12] border border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
@@ -349,7 +349,7 @@ export const LoginPage: React.FC = () => {
                   <input
                     type="text"
                     required
-                    value={regEmail}
+                    value={regEmail ?? ''}
                     onChange={(e) => setRegEmail(e.target.value)}
                     placeholder="mullojon@devopspro.tech"
                     className="w-full bg-[#0D0D12] border border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
@@ -367,7 +367,7 @@ export const LoginPage: React.FC = () => {
                   <input
                     type="password"
                     required
-                    value={regPassword}
+                    value={regPassword ?? ''}
                     onChange={(e) => setRegPassword(e.target.value)}
                     placeholder="Придумайте пароль (мин. 4 символа)"
                     className="w-full bg-[#0D0D12] border border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
@@ -385,7 +385,7 @@ export const LoginPage: React.FC = () => {
                   <input
                     type="password"
                     required
-                    value={regPasswordConfirm}
+                    value={regPasswordConfirm ?? ''}
                     onChange={(e) => setRegPasswordConfirm(e.target.value)}
                     placeholder="Повторите введенный пароль"
                     className="w-full bg-[#0D0D12] border border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
@@ -401,7 +401,7 @@ export const LoginPage: React.FC = () => {
                 <div className="relative">
                   <Users className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   <select
-                    value={regGroup}
+                    value={regGroup ?? 'Группа 1 (Август 2026)'}
                     onChange={(e) => setRegGroup(e.target.value)}
                     className="w-full bg-[#0D0D12] border border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
                   >

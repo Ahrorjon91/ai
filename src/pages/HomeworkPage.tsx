@@ -400,7 +400,7 @@ export const HomeworkPage: React.FC = () => {
                 <input
                   type="url"
                   placeholder="https://github.com/username/devops-lab-repo"
-                  value={fileUrlInput}
+                  value={fileUrlInput ?? ''}
                   onChange={(e) => setFileUrlInput(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500"
                 />
@@ -469,7 +469,7 @@ export const HomeworkPage: React.FC = () => {
                 <textarea
                   rows={3}
                   placeholder="Опишите выполненные задачи, конфигурационные файлы или возникшие сложности..."
-                  value={notesInput}
+                  value={notesInput ?? ''}
                   onChange={(e) => setNotesInput(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500"
                 />

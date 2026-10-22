@@ -478,9 +478,11 @@ export function generateXpLedger(
 
       const qEmail = String(qs.studentEmail || '').toLowerCase().trim();
       const qId = String(qs.studentId || '').trim();
-      const isMine = (!qEmail && !qId) ||
-                     (qEmail && emailLower && (qEmail === emailLower || qEmail.includes(emailLower) || emailLower.includes(qEmail))) ||
-                     (qId && sId && (qId === sId || qId.toLowerCase() === sId.toLowerCase()));
+      const hasOwner = Boolean(qEmail || qId);
+      const isMine = hasOwner
+        ? Boolean((qEmail && emailLower && (qEmail === emailLower || qEmail.includes(emailLower) || emailLower.includes(qEmail))) ||
+                  (qId && sId && (qId === sId || qId.toLowerCase() === sId.toLowerCase())))
+        : (!emailLower && !sId);
       if (!isMine) return;
 
       const qTestId = String(qs.quizId || qs.id || '');

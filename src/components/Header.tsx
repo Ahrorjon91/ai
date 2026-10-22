@@ -4,15 +4,9 @@ import studentAvatarSvg from '../assets/images/student_avatar.svg';
 import {
   Menu,
   Search,
-  Bell,
-  CheckCircle2,
-  Calendar,
   ChevronDown,
-  Terminal,
   LogOut,
   User,
-  Settings,
-  ShieldCheck,
   Sparkles
 } from 'lucide-react';
 
@@ -22,15 +16,13 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onMobileToggle }) => {
-  const { profile, activePage, setActivePage, logoutStudent, selectedLessonId } = usePortal();
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const { profile, activePage, setActivePage, logoutStudent } = usePortal();
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const profileDropdownRef = useRef<HTMLDivElement>(null);
-  const notificationsDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Auto-hide dropdowns when clicking outside or selecting other functions
+  // Auto-hide dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       if (
@@ -38,12 +30,6 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onMobileToggle 
         !profileDropdownRef.current.contains(event.target as Node)
       ) {
         setProfileDropdownOpen(false);
-      }
-      if (
-        notificationsDropdownRef.current &&
-        !notificationsDropdownRef.current.contains(event.target as Node)
-      ) {
-        setNotificationsOpen(false);
       }
     };
 
@@ -58,14 +44,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onMobileToggle 
   // Auto-close on page change
   useEffect(() => {
     setProfileDropdownOpen(false);
-    setNotificationsOpen(false);
   }, [activePage]);
-
-  const notifications = [
-    { id: 1, title: 'Лабораторная #18 доступна', time: '10 мин назад', read: false },
-    { id: 2, title: 'Оценка за Домашнюю работу #15: 95/100', time: '2 часа назад', read: false },
-    { id: 3, title: 'Консультация с Ментором завтра в 16:00', time: '1 день назад', read: true }
-  ];
 
   return (
     <header className="sticky top-0 z-30 h-14 sm:h-16 bg-white/90 dark:bg-[#0D0D12]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-200 px-2.5 sm:px-4 md:px-6 flex items-center justify-between transition-colors duration-200 gap-2">
@@ -99,7 +78,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onMobileToggle 
           <input
             type="text"
             placeholder="Поиск (AI, Vibe Coding, LLM)..."
-            value={searchQuery}
+            value={searchQuery ?? ''}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && searchQuery) {
@@ -113,51 +92,6 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onMobileToggle 
 
       {/* Right Controls (all shrink-0 and compact) */}
       <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-        {/* Quick Launch: Quick Jump to Current Lesson (fits compactly in one line) */}
-        <button
-          onClick={() => setActivePage(activePage === 'lesson-detail' ? 'lessons' : 'lesson-detail')}
-          className={`shrink-0 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 sm:gap-1.5 transition-all border ${
-            activePage === 'lesson-detail'
-              ? 'bg-cyan-600 text-white border-cyan-400 shadow-sm shadow-cyan-600/30'
-              : 'bg-cyan-950/40 text-cyan-300 border-cyan-800/80 hover:border-cyan-500 hover:bg-cyan-900/40'
-          }`}
-          title="Быстрый переход к текущему занятию в 1 клик"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-          <span className="whitespace-nowrap font-mono text-[11px] sm:text-xs">Урок {selectedLessonId || 1}</span>
-        </button>
-
-        {/* Notifications Dropdown */}
-        <div className="relative shrink-0" ref={notificationsDropdownRef}>
-          <button
-            onClick={() => setNotificationsOpen(!notificationsOpen)}
-            className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 relative transition-all group cursor-pointer"
-          >
-            <Bell className="w-4 h-4 sm:w-5 sm:h-5 group-hover:animate-bell transition-transform" />
-            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#06b6d4]" />
-          </button>
-
-          {notificationsOpen && (
-            <div className="absolute right-0 mt-2 w-80 bg-[#14141B] border border-white/10 rounded-2xl shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2">
-              <div className="px-4 py-2 border-b border-white/5 flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-200">Уведомления</span>
-                <span className="text-[10px] text-blue-400 font-medium">3 новых</span>
-              </div>
-              <div className="max-h-64 overflow-y-auto divide-y divide-white/5">
-                {notifications.map((n) => (
-                  <div key={n.id} className="p-3 hover:bg-white/5 cursor-pointer transition-colors flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-xs text-slate-200 font-medium leading-snug">{n.title}</p>
-                      <span className="text-[10px] text-slate-400">{n.time}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
 
         {/* Student/Admin Profile Dropdown */}
         <div className="relative shrink-0" ref={profileDropdownRef}>

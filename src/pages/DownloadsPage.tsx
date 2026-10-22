@@ -362,7 +362,7 @@ export const DownloadsPage: React.FC = () => {
                     </label>
                     <input
                       type="url"
-                      value={tempUrl}
+                      value={tempUrl ?? ''}
                       onChange={(e) => setTempUrl(e.target.value)}
                       placeholder="https://..."
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-white text-xs outline-none focus:border-cyan-400 font-mono"
@@ -511,7 +511,7 @@ export const DownloadsPage: React.FC = () => {
                   type="text"
                   required
                   placeholder="Например: MobaXterm / Wireshark / Мой Скрипт"
-                  value={newSoftware.title}
+                  value={newSoftware.title ?? ''}
                   onChange={(e) => setNewSoftware({ ...newSoftware, title: e.target.value })}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:ring-1 focus:ring-cyan-400"
                 />
@@ -523,7 +523,7 @@ export const DownloadsPage: React.FC = () => {
                   <input
                     type="text"
                     placeholder="ISO / Tools / Scripts"
-                    value={newSoftware.category}
+                    value={newSoftware.category ?? 'Tools'}
                     onChange={(e) => setNewSoftware({ ...newSoftware, category: e.target.value })}
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:ring-1 focus:ring-cyan-400"
                   />
@@ -533,7 +533,7 @@ export const DownloadsPage: React.FC = () => {
                   <input
                     type="text"
                     placeholder="45 MB"
-                    value={newSoftware.fileSize}
+                    value={newSoftware.fileSize ?? ''}
                     onChange={(e) => setNewSoftware({ ...newSoftware, fileSize: e.target.value })}
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:ring-1 focus:ring-cyan-400"
                   />
@@ -546,7 +546,7 @@ export const DownloadsPage: React.FC = () => {
                   type="url"
                   required
                   placeholder="https://drive.google.com/... или https://my-site.com/app.exe"
-                  value={newSoftware.downloadUrl}
+                  value={newSoftware.downloadUrl ?? ''}
                   onChange={(e) => setNewSoftware({ ...newSoftware, downloadUrl: e.target.value })}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:ring-1 focus:ring-cyan-400 font-mono text-xs"
                 />
@@ -557,7 +557,7 @@ export const DownloadsPage: React.FC = () => {
                 <textarea
                   rows={2}
                   placeholder="Краткое описание дистрибутива..."
-                  value={newSoftware.description}
+                  value={newSoftware.description ?? ''}
                   onChange={(e) => setNewSoftware({ ...newSoftware, description: e.target.value })}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none resize-none focus:ring-1 focus:ring-cyan-400"
                 />

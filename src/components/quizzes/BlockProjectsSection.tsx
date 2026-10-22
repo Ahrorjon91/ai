@@ -634,7 +634,7 @@ export const BlockProjectsSection: React.FC = () => {
                       <div className="relative">
                         <input
                           type="url"
-                          value={formState.github}
+                          value={formState.github ?? ''}
                           onChange={(e) => handleFormChange(proj.lessonId, 'github', e.target.value)}
                           placeholder="https://github.com/username/project-name"
                           className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-mono placeholder:text-slate-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
@@ -664,7 +664,7 @@ export const BlockProjectsSection: React.FC = () => {
                       <div className="relative">
                         <input
                           type="url"
-                          value={formState.vercel}
+                          value={formState.vercel ?? ''}
                           onChange={(e) => handleFormChange(proj.lessonId, 'vercel', e.target.value)}
                           placeholder="https://my-project-name.vercel.app"
                           className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-mono placeholder:text-slate-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
@@ -681,7 +681,7 @@ export const BlockProjectsSection: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      value={formState.notes}
+                      value={formState.notes ?? ''}
                       onChange={(e) => handleFormChange(proj.lessonId, 'notes', e.target.value)}
                       placeholder="Опишите, какие фичи реализованы, особенности промптов или архитектуры..."
                       className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"

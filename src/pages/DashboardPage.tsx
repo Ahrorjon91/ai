@@ -19,7 +19,6 @@ import {
   Clock,
   Target,
   Lock,
-  Send,
   HelpCircle,
   GraduationCap,
   ShieldCheck,
@@ -237,28 +236,6 @@ export const DashboardPage: React.FC = () => {
               <Zap className="w-4 h-4 text-amber-400 fill-current animate-pulse" />
               <AnimatedCounter value={stats.totalPoints || 0} suffix=" EXP" />
             </button>
-
-            {/* Open Syllabus Passport Modal */}
-            <button
-              onClick={() => setIsSyllabusModalOpen(true)}
-              className="px-4 py-3 rounded-2xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 text-xs font-bold flex items-center gap-2 transition-all shadow-sm cursor-pointer hover:border-cyan-400"
-              title="Открыть паспорт и силлабус программы обучения"
-            >
-              <BookOpen className="w-4 h-4 text-cyan-400" />
-              <span>Паспорт Силлабуса</span>
-            </button>
-
-            {/* Telegram Manager Support */}
-            <a
-              href="https://t.me/aivioratj"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-3 rounded-2xl bg-blue-600/80 hover:bg-blue-500 text-white border border-blue-400/30 text-xs font-semibold flex items-center gap-2 transition-all shadow-md"
-              title="Написать менеджеру курса в Telegram"
-            >
-              <Send className="w-4 h-4 text-white" />
-              <span>Менеджер в Telegram</span>
-            </a>
           </div>
         </div>
 

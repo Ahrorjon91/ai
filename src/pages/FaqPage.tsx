@@ -245,7 +245,7 @@ export const FaqPage: React.FC = () => {
             <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              value={searchQuery}
+              value={searchQuery ?? ''}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Поиск по вопросам и ответам базы знаний..."
               className="w-full pl-11 pr-4 py-2.5 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/60 transition-colors"

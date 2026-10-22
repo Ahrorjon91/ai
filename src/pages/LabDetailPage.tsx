@@ -738,7 +738,7 @@ export const LabDetailPage: React.FC = () => {
                 <label className="block text-slate-300 mb-1 font-medium">Ссылка на скриншот (URL) или выберите пример</label>
                 <input
                   type="url"
-                  value={newScreenshotUrl}
+                  value={newScreenshotUrl ?? ''}
                   onChange={(e) => setNewScreenshotUrl(e.target.value)}
                   placeholder="https://... (изображение терминала / работы)"
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500"

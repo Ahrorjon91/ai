@@ -814,7 +814,7 @@ export const MentorPage: React.FC = () => {
                   <label className="block text-slate-600 dark:text-slate-400 mb-1">Выберите дату</label>
                   <input
                     type="date"
-                    value={selectedDate}
+                    value={selectedDate ?? ''}
                     onChange={(e) => setSelectedDate(e.target.value)}
                     className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-medium"
                   />
@@ -822,7 +822,7 @@ export const MentorPage: React.FC = () => {
                 <div>
                   <label className="block text-slate-600 dark:text-slate-400 mb-1">Выберите удобное время</label>
                   <select
-                    value={selectedTime}
+                    value={selectedTime ?? '14:00'}
                     onChange={(e) => setSelectedTime(e.target.value)}
                     className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-medium"
                   >
@@ -904,7 +904,7 @@ export const MentorPage: React.FC = () => {
                 <input
                   type="url"
                   placeholder="https://example.com/photo.jpg"
-                  value={photoUrlInput}
+                  value={photoUrlInput ?? ''}
                   onChange={(e) => setPhotoUrlInput(e.target.value)}
                   className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white font-mono placeholder:text-slate-400"
                 />

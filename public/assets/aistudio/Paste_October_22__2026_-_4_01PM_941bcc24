@@ -1,0 +1,795 @@
+PROJECT: DEVOPS ACADEMY — STUDENT PORTAL
+TASK: COMPLETE DATABASE AUDIT, SQLITE PERSISTENCE, DATA INTEGRITY,
+AUTOMATIC BACKUPS, AND FULL RESTORATION SYSTEM.
+
+IMPORTANT:
+You are working on an EXISTING, FUNCTIONAL student portal application.
+
+Your task is to audit, improve, and secure the existing application's
+database architecture without breaking its current functionality,
+design, user interface, authentication, courses, lessons, quizzes,
+assignments, student progress, mentor functions, or administrator tools.
+
+Do not rebuild the application from scratch.
+Do not remove existing features.
+Do not replace working functionality with mock data.
+Do not introduce a new database system.
+
+SQLite must remain the single source of truth for all persistent
+student-related application data.
+
+========================================================
+1. FIRST: AUDIT THE EXISTING APPLICATION
+========================================================
+
+Before making changes, inspect the entire codebase.
+
+Identify:
+
+- The programming language and framework.
+- The current SQLite database implementation.
+- The exact database file path.
+- All database tables, columns, indexes, and relationships.
+- The existing user registration and authentication implementation.
+- Every API endpoint responsible for creating, reading, updating,
+  or deleting user-related information.
+- All lesson progress tracking functionality.
+- All quiz, test, homework, assignment, and submission functionality.
+- All attached file upload and download functionality.
+- All mentor and administrator functions.
+- All places where application data is stored outside SQLite.
+- All browser localStorage and sessionStorage usage.
+- Any in-memory arrays, temporary files, JSON files, or mock data
+  used to store information that should survive application restarts.
+- Existing backup and restore mechanisms.
+- Docker configuration, persistent volumes, and database paths.
+
+Search the entire project for every operation that reads or writes
+student data.
+
+Create a data-flow map showing:
+
+USER ACTION -> API/BACKEND -> SQLITE DATABASE -> RESTORE PATH.
+
+Identify why recently registered users or updated student information
+were missing after restoring a previous database backup.
+
+Do not assume that copying portal.db alone is sufficient.
+
+Do not modify the production database or delete any existing data
+during the audit.
+
+If the existing architecture is different from your assumptions,
+adapt your implementation to the actual codebase.
+
+========================================================
+2. SQLITE MUST BE THE SINGLE SOURCE OF TRUTH
+========================================================
+
+All persistent application data must be stored in SQLite.
+
+This includes:
+
+A. USER ACCOUNTS
+- Unique user ID.
+- Full name.
+- Username.
+- Email address.
+- Phone number, if currently supported.
+- Registration date.
+- Account status.
+- Assigned role.
+- Course enrollment information.
+- Other existing profile fields.
+- Password authentication information.
+- Relevant account settings.
+
+B. STUDENT PROGRESS
+- Course enrollment.
+- Current course.
+- Current lesson.
+- Completed lessons.
+- Lesson completion timestamps.
+- Lesson progress percentage.
+- Quiz attempts and results.
+- Test scores.
+- Homework submissions.
+- Assignment status.
+- Mentor feedback.
+- Mentor approval or rejection.
+- Experience points (EXP).
+- Badges and achievements.
+- Certificates and eligibility.
+- Existing leaderboard information.
+- Any other progress information currently supported.
+
+C. LESSON CONTENT AND CONFIGURATION
+- Course records.
+- Module records.
+- Lesson records.
+- Lesson content and configuration.
+- Lesson completion requirements.
+- Quiz questions and answer configuration.
+- Homework configuration.
+- Other lesson-related information currently stored persistently.
+
+Do not replace existing course content or lesson structures unnecessarily.
+
+D. FILE ATTACHMENTS
+- Student-uploaded homework files.
+- Assignment attachments.
+- Profile images, if supported.
+- Other user-generated files.
+
+All uploaded files must be recoverable from the SQLite database backup.
+
+Preferred implementation:
+Store the actual binary file contents in SQLite BLOB columns,
+along with their metadata.
+
+Possible metadata includes:
+- File ID.
+- Owner user ID.
+- Related lesson or assignment ID.
+- Original filename.
+- MIME type.
+- File size.
+- Upload timestamp.
+- File contents as a BLOB.
+- Relevant access-control information.
+
+Adapt the schema to the existing application and its framework.
+
+Do not store only file paths or URLs if the actual files exist
+outside SQLite.
+
+Do not assume that a filename or attachment record is sufficient
+to recover the original file.
+
+If the application already has an attachment system, migrate it
+carefully without losing existing attachments.
+
+E. APPLICATION DATA
+Preserve existing notifications, achievements, activity history,
+settings, mentor records, and administrative information wherever
+they are part of the current application.
+
+Do not store secrets, passwords, or authentication tokens in
+plaintext.
+
+========================================================
+3. IMPLEMENT COMPLETE CRUD OPERATIONS
+========================================================
+
+Implement or repair the application's database operations:
+
+CREATE:
+When a new student registers, persist the complete account record
+and its required related records in SQLite.
+
+READ:
+When a student logs in or opens the portal, retrieve the relevant
+account information and progress from SQLite.
+
+UPDATE:
+When a student changes their profile, completes a lesson, submits
+homework, takes a test, earns EXP, or receives mentor feedback,
+persist the changes in SQLite.
+
+DELETE:
+When an authorized administrator deletes an account or a user
+requests an allowed deletion, apply the existing deletion policy
+consistently to related records.
+
+Use transactions for operations that modify multiple related tables.
+
+Use prepared statements or parameterized queries for all database
+operations.
+
+Enforce appropriate foreign keys, uniqueness constraints, and
+validation rules.
+
+Do not create duplicate accounts or duplicate lesson progress records
+when a request is repeated.
+
+Protect against race conditions and simultaneous database writes.
+
+Do not allow students to read or modify another student's private data.
+
+Enforce role-based permissions on the backend, not only in the UI.
+
+IMPORTANT:
+Never implement account deletion as an uncontrolled cascading delete
+that accidentally removes unrelated students' information.
+
+Before destructive operations, enforce the application's existing
+authorization rules and confirmation process.
+
+========================================================
+4. PASSWORDS AND AUTHENTICATION
+========================================================
+
+Preserve the existing authentication system where possible.
+
+Every user must be able to log in after the application is restarted
+or redeployed, provided their account exists in the restored database.
+
+Password information must be stored securely using an appropriate
+password hashing algorithm such as Argon2id or bcrypt.
+
+Never store plaintext passwords.
+
+Never store recoverable plaintext passwords in backups.
+
+If password hashes already exist, preserve them and maintain
+backward compatibility.
+
+Do not silently reset student passwords during migration or restore.
+
+Persist account status, roles, and authentication-related records
+that the application requires.
+
+Review session and token behavior so that restoring a database does
+not expose accounts or invalidate users unexpectedly.
+
+Never log passwords, session tokens, or other authentication secrets.
+
+========================================================
+5. LESSON PROGRESS MUST SURVIVE ALL RESTARTS
+========================================================
+
+A student's progress must not depend on browser memory or a running
+application process.
+
+When a student completes a lesson:
+
+1. Validate the action on the backend.
+2. Write the completion record to SQLite.
+3. Persist the completion timestamp.
+4. Update the relevant progress information.
+5. Update EXP or achievements where applicable.
+6. Return success only after the database transaction commits.
+
+When a student submits a quiz or homework assignment, persist the
+submission, result, timestamp, and related records.
+
+When the student logs in again, reload progress from SQLite.
+
+When the browser is refreshed, progress must remain unchanged.
+
+When the application process restarts, progress must remain unchanged.
+
+When the Docker container is recreated, progress must remain unchanged.
+
+When a previous valid database backup is restored, the portal must
+display the progress contained in that backup.
+
+Do not derive permanent progress exclusively from localStorage.
+
+Browser storage may be used for temporary UI preferences or caching,
+but SQLite must remain authoritative for persistent student progress.
+
+Prevent lesson progress from being accidentally reset when lesson
+content or frontend components are updated.
+
+Use stable course, lesson, and student IDs instead of relying only
+on lesson titles or array positions.
+
+========================================================
+6. DATABASE MIGRATIONS AND SCHEMA VERSIONING
+========================================================
+
+Implement safe, versioned SQLite schema migrations.
+
+Requirements:
+
+- Maintain a database schema version.
+- Apply migrations automatically and safely when appropriate.
+- Never recreate an existing database merely because the schema
+  version changes.
+- Never drop existing tables or columns containing student data
+  without an explicitly approved migration plan.
+- Preserve existing user IDs and relationships.
+- Preserve lesson progress, quiz attempts, assignments, and files.
+- Make migrations idempotent where possible.
+- Use transactions for migrations where supported.
+- Back up the database before running destructive migrations.
+- Handle failed migrations safely.
+- Log migration status without exposing sensitive information.
+
+If the application already has a migration framework, extend it
+rather than introducing a conflicting system.
+
+========================================================
+7. AUTOMATIC DATABASE BACKUP
+========================================================
+
+Implement a reliable backup mechanism for the SQLite database.
+
+The backup must include ALL persistent records and embedded file
+attachments.
+
+Do not back up only selected tables.
+
+Requirements:
+
+- Create a backup before risky database migrations.
+- Support administrator-triggered manual backups.
+- Support scheduled backups where the deployment environment
+  provides a reliable scheduler.
+- Use SQLite's online backup API or another SQLite-aware method
+  when the application is actively running.
+- Do not rely on copying a live SQLite file alone if WAL mode
+  or active writes could make the backup inconsistent.
+- Ensure WAL data is correctly included in the backup.
+- Generate a timestamped backup filename.
+- Validate that the resulting backup is a readable SQLite database.
+- Record backup creation time, size, status, and verification result.
+- Handle insufficient disk space and backup failures.
+- Never report success if the backup failed.
+
+Example filename:
+
+portal-backup-2026-10-22T133000Z.db
+
+Adapt the naming convention to the application's existing standards.
+
+BACKUP RETENTION:
+
+Implement configurable retention, for example:
+
+- Recent daily backups.
+- Recent weekly backups.
+- Selected monthly backups.
+
+Never automatically delete the only valid backup.
+
+Do not delete backups until a newer backup has been created and
+verified successfully.
+
+Do not let a cleanup task delete the live database.
+
+========================================================
+8. COMPLETE RESTORE SYSTEM
+========================================================
+
+Implement a safe restore mechanism that can recover the application
+from a verified SQLite backup.
+
+Restore must recover:
+
+- User accounts.
+- Existing password hashes.
+- User profiles.
+- Roles and permissions.
+- Course enrollments.
+- Course and lesson records.
+- Student lesson progress.
+- Quiz attempts and scores.
+- Homework submissions.
+- Mentor reviews.
+- EXP and achievements.
+- Certificates and eligibility records.
+- Uploaded file contents and metadata.
+- Other persistent application information.
+
+Restore requirements:
+
+1. Require administrator authorization.
+2. Validate the selected backup file.
+3. Verify that the file is a valid SQLite database.
+4. Run SQLite integrity checks.
+5. Check the database schema version.
+6. Create a backup of the current live database before replacement.
+7. Restore into a temporary database or another safe staging location.
+8. Validate the restored schema and required tables.
+9. Check important foreign-key relationships.
+10. Confirm that expected student records and attachments exist.
+11. Switch to the restored database safely.
+12. Reopen database connections if required.
+13. Verify that the application can read the restored database.
+14. Report the outcome clearly to the administrator.
+
+Never overwrite the current database with an invalid or incomplete
+backup.
+
+If restore fails, preserve the current database and provide a safe
+rollback path.
+
+Avoid copying a database over the live database while application
+requests are writing to it.
+
+Ensure that the application is not left using stale database
+connections after restoration.
+
+If a full application restart is required, handle it through the
+existing deployment mechanism rather than assuming the process
+can restart itself.
+
+========================================================
+9. IMPORTANT: BACKUP AND RESTORE MUST BE TESTED
+========================================================
+
+A backup is not considered successful merely because a file exists.
+
+Implement automated tests that verify real data recovery.
+
+Create a dedicated test environment or isolated temporary database.
+
+Do not run destructive restore tests against the production database.
+
+Test scenario 1: New user.
+
+1. Register a new test student.
+2. Confirm the account exists in SQLite.
+3. Record the user ID.
+4. Create a backup.
+5. Confirm the backup contains that user.
+
+Test scenario 2: Updated student.
+
+1. Update the student's profile.
+2. Confirm the update was committed to SQLite.
+3. Create a new backup.
+4. Restore it in the isolated test environment.
+5. Confirm the updated profile is recovered.
+
+Test scenario 3: Lesson progress.
+
+1. Enroll the test student in a course.
+2. Complete a lesson.
+3. Submit a quiz.
+4. Record the score and EXP.
+5. Create a backup.
+6. Restore the backup in the isolated environment.
+7. Verify the enrollment, completed lesson, score, and EXP.
+
+Test scenario 4: Uploaded files.
+
+1. Upload a sample assignment file.
+2. Confirm its actual binary contents are stored in SQLite.
+3. Create a backup.
+4. Restore the backup.
+5. Download the restored file.
+6. Verify that the recovered file contents match the original.
+
+Test scenario 5: Application restart.
+
+1. Create a test student and record progress.
+2. Restart the application.
+3. Verify that the account and progress remain available.
+
+Test scenario 6: Container recreation.
+
+In an isolated deployment, recreate the application container
+using the actual deployment configuration.
+
+Verify that the application still uses the expected persistent
+database and that all student information remains available.
+
+Test scenario 7: Database restore.
+
+1. Create student A and save a backup.
+2. Register student B after that backup.
+3. Create a newer backup.
+4. Restore the older backup in the isolated test environment.
+5. Confirm that student A exists and student B does not exist
+   in that older snapshot.
+6. Restore the newer backup.
+7. Confirm that both students and their expected information
+   exist in the newer snapshot.
+
+This test demonstrates an important principle:
+
+Restoring an older backup restores the state captured at the time
+of that backup. It cannot automatically recover records created
+afterward unless those records exist in another backup or recovery
+source.
+
+Test scenario 8: Corrupt backup.
+
+Attempt to restore an invalid or corrupted database file.
+
+Confirm that the application rejects it and preserves the current
+database.
+
+Test scenario 9: Foreign-key integrity.
+
+Run appropriate foreign-key checks and verify that no unexpected
+orphaned records are introduced.
+
+Test scenario 10: Repeated restore.
+
+Restore a valid backup more than once in the isolated environment.
+
+Verify that restoration does not create duplicate users or corrupt
+the database.
+
+========================================================
+10. DOCKER AND DOKPLOY PERSISTENCE
+========================================================
+
+The application runs in Docker and is deployed through Dokploy.
+
+Inspect the actual Docker configuration and determine whether
+/app/data is stored in:
+
+- A named Docker volume.
+- A bind mount.
+- The container's writable filesystem.
+
+Do not assume that the database survives container recreation.
+
+Configure the application to use a persistent Docker volume or
+bind mount for its live database.
+
+Use a stable database path:
+
+/app/data/portal.db
+
+Keep the existing path if the application already depends on it.
+
+Ensure that the directory exists and that the application has
+the appropriate file permissions.
+
+The application must not create a fresh empty database on startup
+when an existing database is available.
+
+Never overwrite an existing database with seed data during startup.
+
+Seed data must not replace real student accounts or progress.
+
+Ensure that development, test, and production databases are kept
+separate.
+
+Do not place the only backup inside the same container filesystem
+as the live database.
+
+For additional disaster protection, support copying verified
+backups to storage outside the VPS, using an appropriate secure
+backup destination.
+
+If the container is deleted, a properly configured persistent
+volume must retain the live database.
+
+If the VPS and its attached storage are lost, an external backup
+must be available for recovery.
+
+========================================================
+11. ADMINISTRATOR DATABASE MANAGEMENT
+========================================================
+
+If the application already has an administrator interface, extend
+it without breaking the existing UI.
+
+Add a database management section with:
+
+- Current database status.
+- Current database file size.
+- Number of registered users.
+- Number of course enrollments.
+- Number of lesson progress records.
+- Number of stored attachments.
+- Most recent successful backup.
+- Backup verification status.
+- List of available backups.
+- Create backup action.
+- Download backup action, if safe and supported.
+- Restore backup action.
+- Restore confirmation dialog.
+- Restore result and error reporting.
+
+Only authorized administrators may access these actions.
+
+Validate all file paths and backup identifiers on the server.
+
+Prevent path traversal and unauthorized access to backup files.
+
+Protect database downloads with authorization checks.
+
+Do not expose backup files publicly through static web hosting.
+
+Do not expose database contents, password hashes, or private
+student information to unauthorized users.
+
+If adding this UI would disrupt existing functionality, implement
+the backend backup and restore capabilities first and integrate
+them into the current administrator interface carefully.
+
+========================================================
+12. SQLITE PERFORMANCE AND RELIABILITY
+========================================================
+
+Review SQLite connection handling and transaction management.
+
+Use appropriate settings for the application's workload.
+
+Consider WAL mode if appropriate.
+
+Configure a reasonable busy timeout.
+
+Ensure foreign-key enforcement is enabled on each relevant connection.
+
+Use transactions for multi-record updates.
+
+Avoid opening unnecessary connections or holding write locks longer
+than necessary.
+
+Use indexes for common queries, including user lookups, enrollments,
+lesson progress, submissions, and file metadata.
+
+Do not enable settings without understanding their impact on the
+deployment and backup process.
+
+If WAL mode is enabled, use a SQLite-aware backup method.
+
+Ensure the application handles concurrent student requests safely.
+
+Do not introduce a database migration or performance optimization
+that risks existing data.
+
+========================================================
+13. DATA RECONCILIATION AND MIGRATION
+========================================================
+
+If the audit discovers student information outside SQLite, do not
+ignore it.
+
+Identify the source and determine whether the information can be
+migrated safely.
+
+Potential sources include:
+
+- Browser localStorage.
+- Browser IndexedDB.
+- JSON files.
+- Temporary application directories.
+- Existing Docker-mounted directories.
+- Previous database files.
+- Existing uploaded attachments.
+- Existing backup files.
+
+Do not assume browser-only information can be recovered from the
+server.
+
+Do not silently delete or overwrite discovered data.
+
+Prepare a migration report containing:
+
+- Data source.
+- Record types.
+- Number of records discovered.
+- Number successfully migrated.
+- Number skipped.
+- Duplicate records.
+- Conflicts.
+- Errors.
+- Recommended manual actions.
+
+Use stable IDs and clear conflict-resolution rules.
+
+Preserve the newest valid information where this can be established
+reliably.
+
+Never claim to recover data that is not present in the database,
+files, backups, or another available source.
+
+========================================================
+14. SECURITY REQUIREMENTS
+========================================================
+
+- Authenticate every sensitive endpoint.
+- Enforce role-based authorization on the backend.
+- Validate all request data.
+- Use parameterized SQL queries.
+- Prevent SQL injection.
+- Prevent path traversal.
+- Protect uploaded files against unauthorized access.
+- Enforce reasonable file size limits.
+- Validate uploaded file types where appropriate.
+- Never execute uploaded files.
+- Avoid leaking internal paths or sensitive errors.
+- Protect backup and restore endpoints against CSRF where relevant.
+- Apply appropriate rate limits to sensitive operations.
+- Do not expose database credentials or secrets in frontend code.
+- Do not return password hashes in normal API responses.
+- Keep audit logs for backup and restore operations.
+- Record who initiated a restore and when it occurred.
+- Do not log sensitive authentication information.
+
+========================================================
+15. IMPLEMENTATION RULES
+========================================================
+
+Follow this order:
+
+PHASE 1: Audit the existing application and database.
+
+PHASE 2: Explain the identified root causes of data loss.
+
+PHASE 3: Propose a safe implementation plan.
+
+PHASE 4: Implement the required schema changes and migrations.
+
+PHASE 5: Repair all CRUD operations and persistence logic.
+
+PHASE 6: Implement reliable database backup and restore.
+
+PHASE 7: Ensure Docker and Dokploy persistence.
+
+PHASE 8: Implement or repair administrator database management.
+
+PHASE 9: Run automated tests using isolated test data.
+
+PHASE 10: Provide a complete implementation report.
+
+Make actual changes to the existing project files where the
+environment supports editing.
+
+Do not stop after describing what needs to be done.
+
+Do not merely provide example code without integrating it into
+the existing application.
+
+Preserve existing UI design, routes, APIs, and functionality unless
+a change is necessary for data integrity or security.
+
+Do not delete existing data.
+
+Do not perform destructive database operations automatically.
+
+Do not replace production credentials or introduce insecure defaults.
+
+If a required action could cause irreversible data loss, stop and
+explain the risk before performing that action.
+
+========================================================
+16. FINAL ACCEPTANCE CRITERIA
+========================================================
+
+The task is complete only when the implementation demonstrates:
+
+1. Newly registered users are saved in SQLite.
+2. Existing users can log in after application restarts.
+3. Password hashes remain valid after backup and restore.
+4. Student profile changes persist in SQLite.
+5. Lesson progress survives page refreshes.
+6. Lesson progress survives application restarts.
+7. Quiz attempts and results survive application restarts.
+8. Homework submissions and mentor reviews are preserved.
+9. Uploaded file contents are included in the database backup.
+10. Database backups can be verified.
+11. Restoring a valid backup recovers all records contained in it.
+12. Invalid backups are rejected safely.
+13. A failed restore does not destroy the current database.
+14. Container recreation does not erase persistent application data.
+15. Database migrations preserve existing records.
+16. Existing application functionality continues to work.
+17. Authorization and database security tests pass.
+18. No production data is deleted during testing.
+19. The backup and restore process is documented and repeatable.
+20. The final report distinguishes verified results from
+    functionality that remains untested.
+
+FINAL REPORT:
+
+Provide:
+
+A. Root causes identified.
+B. Files changed.
+C. Database schema changes.
+D. CRUD operations repaired.
+E. Backup and restore implementation.
+F. Docker/Dokploy persistence configuration.
+G. File attachment storage implementation.
+H. Tests executed and their actual results.
+I. Remaining limitations.
+J. Exact operational instructions for creating and restoring backups.
+
+Do not claim that a feature works unless it has been implemented
+and tested successfully.
+
+PRIORITY:
+Protect student data first.
+Preserve existing application functionality second.
+Improve performance and usability third.

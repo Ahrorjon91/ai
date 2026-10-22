@@ -1006,7 +1006,7 @@ export const UnlockLessonsPage: React.FC = () => {
                 <input
                   type="text"
                   placeholder="Поиск ДЗ по студенту, ID или уроку..."
-                  value={hwSearchQuery}
+                  value={hwSearchQuery ?? ''}
                   onChange={(e) => setHwSearchQuery(e.target.value)}
                   className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-white dark:bg-[#0D0D12] border border-slate-300 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
                 />
@@ -1356,7 +1356,7 @@ export const UnlockLessonsPage: React.FC = () => {
                             <input
                               type="text"
                               placeholder="Работа проверена! Итоговая оценка: 100/100."
-                              value={mentorComment}
+                              value={mentorComment ?? ''}
                               onChange={(e) => setMentorComment(e.target.value)}
                               className="w-full bg-white dark:bg-[#14141B] border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
                             />
@@ -1460,7 +1460,7 @@ export const UnlockLessonsPage: React.FC = () => {
                 <input
                   type="text"
                   placeholder="Поиск по студенту / ID / номеру..."
-                  value={labSearchQuery}
+                  value={labSearchQuery ?? ''}
                   onChange={(e) => setLabSearchQuery(e.target.value)}
                   className="pl-8 pr-3 py-1.5 rounded-xl bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-purple-500 w-56"
                 />
@@ -1882,7 +1882,7 @@ export const UnlockLessonsPage: React.FC = () => {
                             </label>
                             <input
                               type="text"
-                              value={labFeedback}
+                              value={labFeedback ?? ''}
                               onChange={(e) => setLabFeedback(e.target.value)}
                               placeholder="Работа проверена! Итоговая оценка: 100/100."
                               className="w-full bg-white dark:bg-[#14141B] border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
@@ -2014,7 +2014,7 @@ export const UnlockLessonsPage: React.FC = () => {
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                 <input
                   type="text"
-                  value={quizSearchQuery}
+                  value={quizSearchQuery ?? ''}
                   onChange={(e) => setQuizSearchQuery(e.target.value)}
                   placeholder="Поиск по ID (USR-STU-02, USR-5666-798), имени студента, теме теста или email..."
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"

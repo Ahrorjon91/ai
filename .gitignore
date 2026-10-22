@@ -6,3 +6,16 @@ coverage/
 *.log
 .env*
 !.env.example
+# SQLite database files
+*.sqlite
+*.sqlite3
+*.db
+
+# SQLite WAL and shared-memory files
+*-wal
+*-shm
+
+# Local database backups
+*-backup.sqlite
+*-backup.sqlite3
+*-backup.db

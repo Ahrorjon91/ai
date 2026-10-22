@@ -46,7 +46,7 @@ export const LabsPage: React.FC = () => {
           <input
             type="text"
             placeholder="Поиск лабораторий..."
-            value={searchQuery}
+            value={searchQuery ?? ''}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
           />
@@ -56,7 +56,7 @@ export const LabsPage: React.FC = () => {
       {/* Mobile Block Select Dropdown */}
       <div className="sm:hidden">
         <select
-          value={selectedBlockId}
+          value={selectedBlockId ?? 'all'}
           onChange={(e) => setSelectedBlockId(e.target.value === 'all' ? 'all' : Number(e.target.value))}
           className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white focus:outline-none focus:border-emerald-500 shadow-sm"
         >

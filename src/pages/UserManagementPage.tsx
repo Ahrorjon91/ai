@@ -139,24 +139,12 @@ export const UserManagementPage: React.FC = () => {
     return Array.from(set);
   }, [customGroups, userAccounts]);
 
-  // Sync users with backend Google Sheets database on mount
+  // Sync users with backend SQLite database on mount
   useEffect(() => {
-    let isMounted = true;
-    api.adminGetStudents()
-      .then((res) => {
-        if (isMounted && res.success && Array.isArray(res.students) && res.students.length > 0) {
-          res.students.forEach((stu: any) => {
-            updateUserAccount(stu.id || stu.email, stu);
-          });
-        }
-      })
-      .catch((err) => {
-        console.warn('Could not sync initial users from Google Sheets:', err);
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    fetchDatabaseFromWebApp().catch((err) => {
+      console.warn('Could not sync initial users from SQLite:', err);
+    });
+  }, [fetchDatabaseFromWebApp]);
 
   const filteredUsers = (userAccounts || []).filter((u) => {
     if (!u) return false;
@@ -199,7 +187,7 @@ export const UserManagementPage: React.FC = () => {
       attendancePct: 100,
     });
 
-    showToast(`Пользователь ${newName} (${newRole}, ${finalGroup}) успешно создан и сохранен в Google Sheets!`);
+    showToast(`Пользователь ${newName} (${newRole}, ${finalGroup}) успешно создан и сохранен в базе данных SQLite!`);
     setIsModalOpen(false);
     setNewName('');
     setNewEmail('');
@@ -237,7 +225,7 @@ export const UserManagementPage: React.FC = () => {
       telegram: editTelegram.trim() || undefined,
     });
 
-    showToast(`Пользователь "${editName}" (группа: ${finalGroup}) обновлен и сохранен в Google Sheets!`);
+    showToast(`Пользователь "${editName}" (группа: ${finalGroup}) обновлен и сохранен в базе данных SQLite!`);
     setEditingUser(null);
     setIsEditCreatingNewGroup(false);
     setCustomEditGroupName('');
@@ -246,17 +234,10 @@ export const UserManagementPage: React.FC = () => {
   const handleReloadFromSheets = async () => {
     setIsSyncing(true);
     try {
-      const res = await api.adminGetStudents();
-      if (res.success && Array.isArray(res.students) && res.students.length > 0) {
-        res.students.forEach((stu: any) => {
-          updateUserAccount(stu.id || stu.email, stu);
-        });
-        showToast('Пользователи успешно прочитаны из Google Sheets (doGET)!');
-      } else {
-        showToast('Таблица пользователей Google Sheets прочитана');
-      }
+      await fetchDatabaseFromWebApp();
+      showToast('Пользователи успешно прочитаны из базы данных SQLite!');
     } catch (err: any) {
-      showToast('Ошибка чтения Google Sheets: ' + (err.message || 'Сбой'));
+      showToast('Ошибка чтения базы данных SQLite: ' + (err.message || 'Сбой'));
     }
     setIsSyncing(false);
   };
@@ -348,7 +329,7 @@ export const UserManagementPage: React.FC = () => {
             <input
               type="text"
               placeholder="Поиск по имени, email или группе..."
-              value={searchQuery}
+              value={searchQuery ?? ''}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-slate-50 dark:bg-[#0D0D12] border border-slate-200 dark:border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
             />
@@ -745,7 +726,7 @@ export const UserManagementPage: React.FC = () => {
                   <input
                     type="text"
                     required
-                    value={editName}
+                    value={editName ?? ''}
                     onChange={(e) => setEditName(e.target.value)}
                     placeholder="John Smith"
                     className="w-full bg-slate-50 dark:bg-[#0D0D12] border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
@@ -757,7 +738,7 @@ export const UserManagementPage: React.FC = () => {
                   <input
                     type="email"
                     required
-                    value={editEmail}
+                    value={editEmail ?? ''}
                     onChange={(e) => setEditEmail(e.target.value)}
                     placeholder="student@devopspro.tech"
                     className="w-full bg-slate-50 dark:bg-[#0D0D12] border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
@@ -770,7 +751,7 @@ export const UserManagementPage: React.FC = () => {
                   <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Пароль</label>
                   <input
                     type="text"
-                    value={editPassword}
+                    value={editPassword ?? ''}
                     onChange={(e) => setEditPassword(e.target.value)}
                     placeholder="Оставьте пустым или введите новый"
                     className="w-full bg-slate-50 dark:bg-[#0D0D12] border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-mono"
@@ -798,7 +779,7 @@ export const UserManagementPage: React.FC = () => {
                     <div className="space-y-1">
                       <input
                         type="text"
-                        value={customEditGroupName}
+                        value={customEditGroupName ?? ''}
                         onChange={(e) => setCustomEditGroupName(e.target.value)}
                         placeholder="Например: Октябрь или Группа Октябрь 2026"
                         autoFocus
@@ -808,7 +789,7 @@ export const UserManagementPage: React.FC = () => {
                     </div>
                   ) : (
                     <select
-                      value={editGroup}
+                      value={editGroup ?? 'Группа 1 (Август 2026)'}
                       onChange={(e) => {
                         if (e.target.value === '__CREATE_NEW__') {
                           setIsEditCreatingNewGroup(true);
@@ -836,7 +817,7 @@ export const UserManagementPage: React.FC = () => {
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Роль в Системе</label>
                   <select
-                    value={editRole}
+                    value={editRole ?? 'student'}
                     onChange={(e) => setEditRole(e.target.value as UserRole)}
                     className="w-full bg-slate-50 dark:bg-[#0D0D12] border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-bold"
                   >
@@ -848,7 +829,7 @@ export const UserManagementPage: React.FC = () => {
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Статус Аккаунта</label>
                   <select
-                    value={editStatus}
+                    value={editStatus ?? 'Active'}
                     onChange={(e) => setEditStatus(e.target.value as 'Active' | 'Blocked' | 'Pending')}
                     className="w-full bg-slate-50 dark:bg-[#0D0D12] border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-bold"
                   >
@@ -864,7 +845,7 @@ export const UserManagementPage: React.FC = () => {
                     type="number"
                     min={1}
                     max={24}
-                    value={editRole === 'admin' ? 24 : editUnlockedLessonsCount}
+                    value={editRole === 'admin' ? 24 : (editUnlockedLessonsCount ?? 1)}
                     disabled={editRole === 'admin'}
                     onChange={(e) => setEditUnlockedLessonsCount(Number(e.target.value))}
                     className="w-full bg-slate-50 dark:bg-[#0D0D12] border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-bold disabled:opacity-50"
@@ -879,7 +860,7 @@ export const UserManagementPage: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    value={editPhone}
+                    value={editPhone ?? ''}
                     onChange={(e) => setEditPhone(e.target.value)}
                     placeholder="+992 90 000 0000"
                     className="w-full bg-slate-50 dark:bg-[#0D0D12] border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
@@ -892,7 +873,7 @@ export const UserManagementPage: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    value={editTelegram}
+                    value={editTelegram ?? ''}
                     onChange={(e) => setEditTelegram(e.target.value)}
                     placeholder="@student_devops"
                     className="w-full bg-slate-50 dark:bg-[#0D0D12] border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
@@ -1009,7 +990,7 @@ export const UserManagementPage: React.FC = () => {
                 <input
                   type="text"
                   required
-                  value={newName}
+                  value={newName ?? ''}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="John Smith"
                   className="w-full bg-slate-50 dark:bg-[#0D0D12] border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
@@ -1021,7 +1002,7 @@ export const UserManagementPage: React.FC = () => {
                 <input
                   type="email"
                   required
-                  value={newEmail}
+                  value={newEmail ?? ''}
                   onChange={(e) => setNewEmail(e.target.value)}
                   placeholder="student@devopspro.tech"
                   className="w-full bg-slate-50 dark:bg-[#0D0D12] border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
@@ -1049,7 +1030,7 @@ export const UserManagementPage: React.FC = () => {
                   <div className="space-y-1.5 p-3 rounded-2xl bg-blue-500/5 border border-blue-500/20">
                     <input
                       type="text"
-                      value={customGroupName}
+                      value={customGroupName ?? ''}
                       onChange={(e) => setCustomGroupName(e.target.value)}
                       placeholder="Например: Октябрь или Группа Октябрь 2026"
                       autoFocus
@@ -1062,7 +1043,7 @@ export const UserManagementPage: React.FC = () => {
                   </div>
                 ) : (
                   <select
-                    value={newGroup}
+                    value={newGroup ?? 'Группа 1 (Август 2026)'}
                     onChange={(e) => {
                       if (e.target.value === '__CREATE_NEW__') {
                         setIsCreatingNewGroup(true);
@@ -1090,7 +1071,7 @@ export const UserManagementPage: React.FC = () => {
                 <input
                   type="text"
                   required
-                  value={newPassword}
+                  value={newPassword ?? ''}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="123456789"
                   className="w-full bg-slate-50 dark:bg-[#0D0D12] border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-mono"
@@ -1100,7 +1081,7 @@ export const UserManagementPage: React.FC = () => {
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Роль в Системе</label>
                 <select
-                  value={newRole}
+                  value={newRole ?? 'student'}
                   onChange={(e) => setNewRole(e.target.value as UserRole)}
                   className="w-full bg-slate-50 dark:bg-[#0D0D12] border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
                 >
@@ -1150,7 +1131,7 @@ export const UserManagementPage: React.FC = () => {
             </p>
 
             <div className="p-3 rounded-2xl bg-rose-500/5 border border-rose-500/15 text-[11px] text-rose-600 dark:text-rose-400 font-medium">
-              ⚠️ Все данные пользователя, включая роли, прогресс, домашние задания и оценки, будут безвозвратно удалены из системы и базы данных Google Sheets.
+              ⚠️ Все данные пользователя, включая роли, прогресс, домашние задания и оценки, будут безвозвратно удалены из системы и базы данных SQLite.
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-2">
@@ -1163,12 +1144,17 @@ export const UserManagementPage: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  deleteUserAccount(userToDelete.id);
-                  showToast(`Пользователь "${userToDelete.name}" успешно и навсегда удален!`);
-                  setUserToDelete(null);
+                onClick={async () => {
+                  try {
+                    await deleteUserAccount(userToDelete.id);
+                    showToast(`Пользователь "${userToDelete.name}" успешно и навсегда удален из SQLite базы данных!`);
+                  } catch (err: any) {
+                    showToast(`Ошибка удаления: ${err?.message || 'Не удалось удалить'}`);
+                  } finally {
+                    setUserToDelete(null);
+                  }
                 }}
-                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md shadow-rose-600/30 flex items-center gap-2 transition-all"
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md shadow-rose-600/30 flex items-center gap-2 transition-all cursor-pointer"
               >
                 <Trash2 className="w-4 h-4" />
                 <span>Да, удалить навсегда</span>
@@ -1221,7 +1207,7 @@ export const UserManagementPage: React.FC = () => {
               <div className="flex gap-2">
                 <input
                   type="text"
-                  value={newGroupNameInput}
+                  value={newGroupNameInput ?? ''}
                   onChange={(e) => setNewGroupNameInput(e.target.value)}
                   placeholder="Название (например: Октябрь или Группа Октябрь 2026)"
                   className="flex-1 bg-white dark:bg-[#0D0D12] border border-purple-400/40 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 font-semibold"

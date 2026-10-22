@@ -1305,7 +1305,7 @@ export const CertificatesPage: React.FC = () => {
                   <label className="block text-slate-400 text-[11px] font-mono mb-1">ФИО Выпускника:</label>
                   <input
                     type="text"
-                    value={customStudentName}
+                    value={customStudentName ?? ''}
                     onChange={(e) => setCustomStudentName(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-[#02050d] border border-cyan-500/30 text-white font-bold focus:outline-none focus:border-cyan-400"
                   />
@@ -1332,7 +1332,7 @@ export const CertificatesPage: React.FC = () => {
                   <label className="block text-slate-400 text-[11px] font-mono mb-1">Credential ID (ID реестра):</label>
                   <input
                     type="text"
-                    value={verificationCode}
+                    value={verificationCode ?? ''}
                     onChange={(e) => setVerificationCode(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-[#02050d] border border-cyan-500/30 text-cyan-300 font-mono font-bold focus:outline-none focus:border-cyan-400"
                   />
@@ -1342,7 +1342,7 @@ export const CertificatesPage: React.FC = () => {
                   <label className="block text-slate-400 text-[11px] font-mono mb-1">Образовательная программа:</label>
                   <input
                     type="text"
-                    value={courseTitle}
+                    value={courseTitle ?? ''}
                     onChange={(e) => setCourseTitle(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-[#02050d] border border-cyan-500/30 text-white focus:outline-none focus:border-cyan-400"
                   />
@@ -1352,7 +1352,7 @@ export const CertificatesPage: React.FC = () => {
                   <label className="block text-slate-400 text-[11px] font-mono mb-1">Академический объём:</label>
                   <input
                     type="text"
-                    value={academicHours}
+                    value={academicHours ?? ''}
                     onChange={(e) => setAcademicHours(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-[#02050d] border border-cyan-500/30 text-white focus:outline-none focus:border-cyan-400"
                   />
@@ -1362,7 +1362,7 @@ export const CertificatesPage: React.FC = () => {
                   <label className="block text-slate-400 text-[11px] font-mono mb-1">Итоговая квалификация:</label>
                   <input
                     type="text"
-                    value={finalScoreText}
+                    value={finalScoreText ?? ''}
                     onChange={(e) => setFinalScoreText(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-[#02050d] border border-cyan-500/30 text-white focus:outline-none focus:border-cyan-400"
                   />
@@ -1372,7 +1372,7 @@ export const CertificatesPage: React.FC = () => {
                   <label className="block text-slate-400 text-[11px] font-mono mb-1">Дата выдачи:</label>
                   <input
                     type="text"
-                    value={issueDate}
+                    value={issueDate ?? ''}
                     onChange={(e) => setIssueDate(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-[#02050d] border border-cyan-500/30 text-white focus:outline-none focus:border-cyan-400"
                   />
@@ -1382,7 +1382,7 @@ export const CertificatesPage: React.FC = () => {
                   <label className="block text-slate-400 text-[11px] font-mono mb-1">Должность подписанта:</label>
                   <input
                     type="text"
-                    value={directorTitle}
+                    value={directorTitle ?? ''}
                     onChange={(e) => setDirectorTitle(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-[#02050d] border border-cyan-500/30 text-white focus:outline-none focus:border-cyan-400"
                   />
@@ -1392,7 +1392,7 @@ export const CertificatesPage: React.FC = () => {
                   <label className="block text-slate-400 text-[11px] font-mono mb-1">ФИО Директора:</label>
                   <input
                     type="text"
-                    value={directorName}
+                    value={directorName ?? ''}
                     onChange={(e) => setDirectorName(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-[#02050d] border border-cyan-500/30 text-cyan-300 font-bold focus:outline-none focus:border-cyan-400"
                   />

@@ -34,4 +34,20 @@ export const adminApi = {
   getAuditLog: async (): Promise<ApiResponse<AuditLogEntry[]>> => {
     return apiRequest<AuditLogEntry[]>('getAuditLog', {}, 'GET');
   },
+
+  createBackup: async (reason?: string): Promise<ApiResponse<any>> => {
+    return apiRequest('createDatabaseBackup', { reason });
+  },
+
+  getBackups: async (): Promise<ApiResponse<any[]>> => {
+    return apiRequest<any[]>('getDatabaseBackups', {}, 'GET');
+  },
+
+  restoreBackup: async (backupId: string): Promise<ApiResponse<any>> => {
+    return apiRequest('restoreDatabase', { backupId });
+  },
+
+  verifyBackup: async (backupId: string): Promise<ApiResponse<any>> => {
+    return apiRequest(`admin/database/backups/${encodeURIComponent(backupId)}/verify`);
+  },
 };

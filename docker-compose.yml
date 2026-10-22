@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  academy-portal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: devops-academy-portal:latest
+    container_name: devops_academy_portal
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - SQLITE_DB_PATH=/app/data/academy.sqlite
+    volumes:
+      # CRITICAL: Persistent named volumes ensure zero data loss during container updates/recreation
+      - academy_db_data:/app/data
+      - academy_uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  academy_db_data:
+    name: devops_academy_db_data
+  academy_uploads:
+    name: devops_academy_uploads

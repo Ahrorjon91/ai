@@ -226,6 +226,9 @@ const ACTION_ENDPOINT_MAP: Record<string, { path: string; method?: 'GET' | 'POST
   clearAllQuizSubmissions: { path: '/clearAllQuizSubmissions', method: 'POST' },
   clearAllLabSubmissions: { path: '/clearAllLabSubmissions', method: 'POST' },
   clearAllHomeworkSubmissions: { path: '/clearAllHomeworkSubmissions', method: 'POST' },
+  createDatabaseBackup: { path: '/admin/database/backup', method: 'POST' },
+  getDatabaseBackups: { path: '/admin/database/backups', method: 'GET' },
+  restoreDatabase: { path: '/admin/database/restore', method: 'POST' },
 };
 
 /**
@@ -635,4 +638,11 @@ export const api = {
   getSqliteDbDownloadUrl: () => `${getBackendApiUrl()}/sqlite/download-db`,
   uploadSqliteDb: (payload: { fileName: string; fileDataUrl?: string; fileBase64?: string; snapshot?: any; jsonContent?: any }) =>
     apiRequest('sqlite/upload-db', payload, 'POST'),
+
+  // Automated & Manual Backups Engine
+  createDatabaseBackup: (reason?: string) => apiRequest('createDatabaseBackup', { reason }, 'POST'),
+  getDatabaseBackups: () => apiRequest('getDatabaseBackups', {}, 'GET'),
+  getDatabaseBackupDownloadUrl: (id: string) => `${getBackendApiUrl()}/admin/database/backups/${encodeURIComponent(id)}/download`,
+  verifyDatabaseBackup: (id: string) => apiRequest(`admin/database/backups/${encodeURIComponent(id)}/verify`, {}, 'POST'),
+  restoreDatabase: (backupId: string) => apiRequest('restoreDatabase', { backupId }, 'POST'),
 };

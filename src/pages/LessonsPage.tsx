@@ -348,7 +348,7 @@ export const LessonsPage: React.FC = () => {
             <input
               type="text"
               placeholder="Поиск по урокам, технологиям (Cursor, n8n, Vercel, React)..."
-              value={searchQuery}
+              value={searchQuery ?? ''}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-10 pr-9 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
             />
@@ -580,12 +580,23 @@ export const LessonsPage: React.FC = () => {
     const bStyle = getBlockStyle(lesson.blockId);
 
     // Progress across the 4 sections of this lesson
+    const currentEmail = (profile?.email || '').toLowerCase().trim();
+    const currentId = profile?.id ? String(profile.id) : '';
+
     const lessonItem = xpBreakdown?.lessonItems?.find((it: any) => it.lessonId === lesson.id);
     const sec1Done = Boolean(readSections[`sec-${lesson.id}-lecture`]);
     const sec2Done = Boolean(
       readSections[`sec-${lesson.id}-lab`] ||
         (lessonItem?.labXp && lessonItem.labXp > 0) ||
-        labs?.some((lb: any) => lb.id === lesson.id && lb.isCompleted)
+        labs?.some((lb: any) => {
+          if (lb.id !== lesson.id || !lb.isCompleted) return false;
+          const lbEmail = (lb.studentEmail || '').toLowerCase().trim();
+          const lbId = lb.studentId ? String(lb.studentId) : '';
+          const hasOwner = Boolean(lbEmail || lbId);
+          return hasOwner
+            ? (currentEmail && lbEmail === currentEmail) || (currentId && lbId === currentId)
+            : (!currentEmail && !currentId);
+        })
     );
     const sec3Done = Boolean(
       readSections[`sec-${lesson.id}-quiz`] ||
@@ -594,20 +605,36 @@ export const LessonsPage: React.FC = () => {
         testScores[String(lesson.id)] !== undefined ||
         testScores[`lesson-${lesson.id}-test`] !== undefined ||
         testScores[`LESSON_${lesson.id}`] !== undefined ||
-        quizSubmissions?.some(
-          (q: any) =>
+        quizSubmissions?.some((q: any) => {
+          const matchesQuiz =
             q.quizId === String(lesson.id) ||
             q.quizId === `lesson-${lesson.id}-test` ||
-            q.quizId === `LESSON_${lesson.id}`
-        ) ||
+            q.quizId === `LESSON_${lesson.id}`;
+          if (!matchesQuiz) return false;
+          const qEmail = (q.studentEmail || '').toLowerCase().trim();
+          const qId = q.studentId ? String(q.studentId) : '';
+          const hasOwner = Boolean(qEmail || qId);
+          const isMySubmission = hasOwner
+            ? (currentEmail && qEmail === currentEmail) || (currentId && qId === currentId)
+            : (!currentEmail && !currentId);
+          const isPassed = q.passed === true || (typeof q.scorePct === 'number' && q.scorePct >= 60);
+          return isMySubmission && isPassed;
+        }) ||
         (lessonItem?.testXp && lessonItem.testXp > 0)
     );
     const sec4Done = Boolean(
       readSections[`sec-${lesson.id}-homework`] ||
         (lessonItem?.homeworkXp && lessonItem.homeworkXp > 0) ||
-        homeworkSubmissions?.some(
-          (h: any) => h.lessonId === lesson.id && (h.status === 'Approved' || h.status === 'Submitted')
-        )
+        homeworkSubmissions?.some((h: any) => {
+          if (h.lessonId !== lesson.id) return false;
+          const hEmail = (h.studentEmail || (h as any).student_email || '').toLowerCase().trim();
+          const hId = h.studentId ? String(h.studentId) : '';
+          const hasOwner = Boolean(hEmail || hId);
+          const isMyHw = hasOwner
+            ? (currentEmail && hEmail === currentEmail) || (currentId && hId === currentId)
+            : (!currentEmail && !currentId);
+          return isMyHw && (h.status === 'Approved' || h.status === 'Submitted');
+        })
     );
     const doneCount = [sec1Done, sec2Done, sec3Done, sec4Done].filter(Boolean).length;
     const earnedXp = lessonItem?.totalLessonXp || 0;
