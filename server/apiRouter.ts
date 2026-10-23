@@ -284,6 +284,8 @@ function saveUploadedFilesLocally(rawFiles: any[], studentEmail?: string, studen
     let sizeBytes = 0;
     let savedToDisk = false;
 
+    let fileBuf: Buffer | undefined = undefined;
+
     if (rawData && typeof rawData === 'string' && rawData.length > 50) {
       try {
         const base64Data = rawData.includes(';base64,') ? rawData.split(';base64,').pop() : rawData;
@@ -291,6 +293,7 @@ function saveUploadedFilesLocally(rawFiles: any[], studentEmail?: string, studen
           const buf = Buffer.from(base64Data, 'base64');
           // Enforce 20 MB size limit
           if (buf.length <= 20 * 1024 * 1024) {
+            fileBuf = buf;
             sizeBytes = buf.length;
             const targetPath = path.join(targetDir, safeName);
             fs.writeFileSync(targetPath, buf);
@@ -306,12 +309,22 @@ function saveUploadedFilesLocally(rawFiles: any[], studentEmail?: string, studen
 
     const attId = file.id || `att-${Date.now()}-${idx}`;
     const sizeStr = file.size || (sizeBytes > 0 ? `${(sizeBytes / 1024).toFixed(1)} KB` : '12 KB');
+
     try {
-      run(
-        `INSERT OR REPLACE INTO attachments (id, name, size, type, data_url, student_email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);`,
-        [attId, rawName, sizeStr, file.type || 'file', serverUrl, String(studentEmail || '').toLowerCase(), new Date().toISOString()]
-      );
-    } catch {}
+      saveAttachmentToSqlite({
+        id: attId,
+        name: rawName,
+        size: sizeStr,
+        type: file.type || 'file',
+        dataUrl: rawData || undefined,
+        fileBuffer: fileBuf,
+        studentEmail: String(studentEmail || '').toLowerCase(),
+        studentId,
+        relatedType: 'submission'
+      });
+    } catch (attErr) {
+      console.warn('[saveUploadedFilesLocally] Warning saving attachment to SQLite:', attErr);
+    }
 
     const cleanFile = { ...file, id: attId, name: rawName, size: sizeStr, url: serverUrl, downloadUrl };
     if (savedToDisk || (typeof serverUrl === 'string' && serverUrl.startsWith('/uploads/'))) {
@@ -651,6 +664,61 @@ apiRouter.get(['/admin/database/backups/:id/download', '/database/backups/:id/do
     res.setHeader('Content-Type', 'application/x-sqlite3');
     res.setHeader('Content-Disposition', `attachment; filename="${path.basename(targetPath)}"`);
     return res.sendFile(targetPath);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Download attachment by ID or path with automatic SQLite BLOB recovery
+apiRouter.get(['/attachments/:id/download', '/attachments/download'], async (req, res) => {
+  try {
+    const attId = req.params.id || String(req.query.id || req.query.fileId || '').trim();
+    const rawFileUrl = String(req.query.fileUrl || req.query.url || '').trim();
+    const fileNameReq = String(req.query.fileName || req.query.name || '').trim();
+
+    let row = attId ? queryOne(`SELECT * FROM attachments WHERE id = ? LIMIT 1`, [attId]) : null;
+    if (!row && rawFileUrl) {
+      const cleanPath = rawFileUrl.replace(/^\/+/, '');
+      row = queryOne(
+        `SELECT * FROM attachments WHERE file_path = ? OR file_path LIKE ? OR data_url = ? LIMIT 1`,
+        [cleanPath, `%${path.basename(cleanPath)}`, rawFileUrl]
+      );
+    }
+
+    const fileName = fileNameReq || row?.name || 'attachment.pdf';
+    const safeExt = path.extname(fileName).toLowerCase() || '.pdf';
+    const mimeType = row?.mime_type || row?.type || (safeExt === '.pdf' ? 'application/pdf' : 'application/octet-stream');
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+
+    // 1. Direct binary BLOB from SQLite
+    if (row && row.file_blob && (Buffer.isBuffer(row.file_blob) || row.file_blob instanceof Uint8Array)) {
+      return res.send(Buffer.from(row.file_blob));
+    }
+
+    // 2. File from disk
+    if (row && row.file_path) {
+      const absPath = path.resolve(process.cwd(), row.file_path);
+      if (fs.existsSync(absPath)) {
+        return res.sendFile(absPath);
+      }
+    }
+
+    if (rawFileUrl && rawFileUrl.startsWith('/uploads/')) {
+      const absPath = path.resolve(process.cwd(), rawFileUrl.replace(/^\/+/, ''));
+      if (fs.existsSync(absPath)) {
+        return res.sendFile(absPath);
+      }
+    }
+
+    // 3. Base64 dataUrl
+    if (row && row.data_url && typeof row.data_url === 'string' && row.data_url.startsWith('data:')) {
+      const b64 = row.data_url.split(';base64,').pop()!;
+      return res.send(Buffer.from(b64, 'base64'));
+    }
+
+    return res.status(404).json({ success: false, error: 'Файл вложения не найден' });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -1377,11 +1445,13 @@ apiRouter.post(['/progress/sync', '/syncProgress'], async (req, res) => {
         if (!isNaN(numId) && numId > 0 && typeof val === 'object' && val !== null) {
           groupedSections[numId] = { ...(groupedSections[numId] || {}), ...(val as any) };
         } else if (typeof key === 'string') {
-          const match = key.match(/^sec-(\d+)-/);
+          const match = key.match(/^(?:sec|lesson)?[-_]?(\d+)[-_]/i) || key.match(/^(\d+)[-_]/);
           if (match) {
             const lId = parseInt(match[1], 10);
-            if (!groupedSections[lId]) groupedSections[lId] = {};
-            groupedSections[lId][key] = Boolean(val);
+            if (lId >= 1 && lId <= 24) {
+              if (!groupedSections[lId]) groupedSections[lId] = {};
+              groupedSections[lId][key] = Boolean(val);
+            }
           }
         }
       }
@@ -1573,6 +1643,8 @@ apiRouter.post(['/homework/submit', '/submitHomework', '/homework/:id/submit'], 
           report_text = ?,
           student_notes = ?,
           file_url = ?,
+          repo_url = ?,
+          github_url = ?,
           attached_files = ?,
           submitted_at = ?,
           status = 'Submitted',
@@ -1581,16 +1653,16 @@ apiRouter.post(['/homework/submit', '/submitHomework', '/homework/:id/submit'], 
           reviewed_by = NULL
         WHERE id = ?;
       `,
-        [studentId || null, studentName || 'Студент', effectiveReportText, effectiveReportText, effectiveFileUrl, filesJson, now, existing.id]
+        [studentId || null, studentName || 'Студент', effectiveReportText, effectiveReportText, effectiveFileUrl, effectiveFileUrl, effectiveFileUrl, filesJson, now, existing.id]
       );
     } else {
       run(
         `
         INSERT INTO homework_submissions (
-          id, lesson_id, student_id, student_name, student_email, report_text, student_notes, file_url, attached_files, submitted_at, status, score
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Submitted', NULL);
+          id, lesson_id, student_id, student_name, student_email, report_text, student_notes, file_url, repo_url, github_url, attached_files, submitted_at, status, score
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Submitted', NULL);
       `,
-        [subId, lId, studentId || null, studentName || 'Студент', email, effectiveReportText, effectiveReportText, effectiveFileUrl, filesJson, now]
+        [subId, lId, studentId || null, studentName || 'Студент', email, effectiveReportText, effectiveReportText, effectiveFileUrl, effectiveFileUrl, effectiveFileUrl, filesJson, now]
       );
     }
 
@@ -1967,10 +2039,10 @@ function handleSubmitTestRequest(req: Request, res: Response) {
     const targetEmail = (caller && caller.role !== 'admin') ? caller.email : studentEmail;
     const { email, studentId: resolvedStudentId } = resolveStudentEmailAndId(targetEmail, studentId, 'quiz_submissions', 'lesson_id', rawLessonId);
 
-    const isBlock = String(quizId || '').toUpperCase().startsWith('BLOCK') || (/^TEST_[1-7]$/i.test(String(quizId || '')) && !lessonId) || String(quizId || '').toUpperCase().includes('FINAL');
-    const qId = isBlock ? String(quizId).toUpperCase() : `LESSON_${rawLessonId}`;
+    const isBlock = String(quizId || '').toUpperCase().startsWith('BLOCK') || /^TEST_[1-7]$/i.test(String(quizId || '')) || String(quizId || '').toUpperCase().includes('FINAL');
+    const qId = isBlock ? String(quizId).toUpperCase() : (rawLessonId ? `LESSON_${rawLessonId}` : String(quizId).toUpperCase());
 
-    const existingQuizRow = queryOne(`SELECT id, mentor_comment, reviewed_at, status FROM quiz_submissions WHERE LOWER(student_email) = ? AND (UPPER(quiz_id) = UPPER(?) OR (? = 0 AND lesson_id = ? AND UPPER(quiz_id) NOT LIKE 'BLOCK%' AND UPPER(quiz_id) NOT LIKE 'FINAL%')) ORDER BY submitted_at DESC LIMIT 1`, [email, qId, isBlock ? 1 : 0, rawLessonId]);
+    const existingQuizRow = queryOne(`SELECT id, mentor_comment, reviewed_at, status FROM quiz_submissions WHERE LOWER(student_email) = ? AND (UPPER(quiz_id) = UPPER(?) OR (? = 0 AND lesson_id = ? AND UPPER(quiz_id) NOT LIKE 'BLOCK%' AND UPPER(quiz_id) NOT LIKE 'TEST_%' AND UPPER(quiz_id) NOT LIKE 'FINAL%')) ORDER BY submitted_at DESC LIMIT 1`, [email, qId, isBlock ? 1 : 0, rawLessonId]);
     const cleanUid = String(resolvedStudentId || email.split('@')[0] || 'STU').replace(/[^a-zA-Z0-9]/g, '').slice(-8) || 'STU';
     const subId = existingQuizRow?.id || (body.id && !String(body.id).startsWith('QSUB-') ? body.id : `QUIZ-SUB-${qId}-${cleanUid}`);
 
@@ -1991,10 +2063,10 @@ function handleSubmitTestRequest(req: Request, res: Response) {
 
     run(
       `INSERT INTO quiz_submissions (id, quiz_id, lesson_id, quiz_title, student_id, student_name, student_email, score_pct, score, max_score, percentage, correct_count, total_questions, passed, submitted_at, status, answers_json, user_answers, details, mentor_comment, retake_allowed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET quiz_id = excluded.quiz_id, lesson_id = excluded.lesson_id, quiz_title = excluded.quiz_title, score_pct = excluded.score_pct, score = excluded.score, max_score = excluded.max_score, percentage = excluded.percentage, correct_count = excluded.correct_count, total_questions = excluded.total_questions, passed = excluded.passed, submitted_at = excluded.submitted_at, status = excluded.status, answers_json = excluded.answers_json, user_answers = excluded.user_answers, details = excluded.details, mentor_comment = excluded.mentor_comment, retake_allowed = excluded.retake_allowed;`,
-      [subId, qId, rawLessonId, quizTitle || `Тестирование ${qId}`, resolvedStudentId || null, studentName || 'Студент', email, scoreVal, scoreVal, totQuest, scoreVal, corrCount, totQuest, isPassed ? 1 : 0, now, submissionStatus, answersJson, userAnswersStr, detailsStr, submissionMentorComment, retakeAllowed]
+      [subId, qId, isBlock ? null : rawLessonId, quizTitle || `Тестирование ${qId}`, resolvedStudentId || null, studentName || 'Студент', email, scoreVal, scoreVal, totQuest, scoreVal, corrCount, totQuest, isPassed ? 1 : 0, now, submissionStatus, answersJson, userAnswersStr, detailsStr, submissionMentorComment, retakeAllowed]
     );
 
-    if (rawLessonId >= 1 && rawLessonId <= 24) {
+    if (!isBlock && rawLessonId >= 1 && rawLessonId <= 24) {
       const existingProg = queryOne(`SELECT read_sections FROM lessons_progress WHERE LOWER(student_email) = ? AND lesson_id = ?`, [email, rawLessonId]);
       let secMap: Record<string, boolean> = {};
       if (existingProg?.read_sections) {
@@ -2010,9 +2082,10 @@ function handleSubmitTestRequest(req: Request, res: Response) {
     const pQuizSet = new Set<string>();
     pQuizRows.forEach((qz) => {
       const rq = String(qz.quiz_id || '').toUpperCase();
+      const isBlockTest = rq.startsWith('BLOCK') || /^TEST_[1-7]$/i.test(rq) || rq.includes('FINAL');
       const m = rq.match(/^(?:LESSON[_-]?|TEST[_-]?)?(\d+)$/i);
       const lid = qz.lesson_id || (m ? parseInt(m[1], 10) : NaN);
-      const cid = !isNaN(lid) && lid >= 1 && lid <= 24 && !rq.startsWith('BLOCK') ? `LESSON_${lid}` : rq;
+      const cid = isBlockTest ? rq : (!isNaN(lid) && lid >= 1 && lid <= 24 ? `LESSON_${lid}` : rq);
       pQuizSet.add(cid);
     });
     const passedCount = pQuizSet.size;

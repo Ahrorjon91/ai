@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   FileText,
   Copy,
-  Send,
   Award,
   Sparkles,
   Rocket,
@@ -35,7 +34,6 @@ export const Lesson1HomeworkSection: React.FC = () => {
   );
 
   const [saved, setSaved] = useState(false);
-  const [submittedToMentor, setSubmittedToMentor] = useState(false);
 
   // Загрузка из localStorage при старте
   useEffect(() => {
@@ -55,22 +53,8 @@ export const Lesson1HomeworkSection: React.FC = () => {
     }
   }, []);
 
-  const handleSaveLocal = () => {
-    localStorage.setItem(
-      'ai_journal_lesson_1',
-      JSON.stringify({ ideas, spotAI, bugFound, dreamIdea, assistantName, bestPrompt })
-    );
-    setSaved(true);
-    addReward(15, '💾 Черновик AI Дневника сохранён! (+15 Опыта)');
-    setTimeout(() => setSaved(false), 2500);
-  };
-
-  const handleSubmitMentor = () => {
-    setSubmittedToMentor(true);
-    handleSaveLocal();
-    addReward(50, '📓 AI Дневник Урока 1 успешно сдан ментору! (+50 Опыта)');
-
-    const compiledJournal = `📓 AI ДНЕВНИК К УРОКУ 1:
+  // Скомпилированный текст дневника
+  const compiledJournal = `📓 AI ДНЕВНИК К УРОКУ 1:
 1) Идеи применения AI в учебе:
 ${ideas}
 
@@ -89,9 +73,17 @@ ${assistantName}
 6) Лучший промпт из урока 1:
 ${bestPrompt}`;
 
-    if (portal?.submitHomework) {
-      portal.submitHomework(1, '', compiledJournal, []).catch((e) => console.warn('Submit HW error:', e));
-    }
+  const handleSaveLocal = () => {
+    localStorage.setItem(
+      'ai_journal_lesson_1',
+      JSON.stringify({ ideas, spotAI, bugFound, dreamIdea, assistantName, bestPrompt })
+    );
+    try {
+      localStorage.setItem('devops_hw_1_notes', compiledJournal);
+    } catch {}
+    setSaved(true);
+    addReward(15, '💾 Черновик AI Дневника сохранён! (+15 Опыта)');
+    setTimeout(() => setSaved(false), 2500);
   };
 
   return (
@@ -113,7 +105,7 @@ ${bestPrompt}`;
         </div>
 
         <p className="text-xs sm:text-sm text-slate-300">
-          Заполни 6 ключевых пунктов дневника исследователя. Все данные сохраняются локально, а по готовности нажми «Отправить ментору»:
+          Заполни 6 ключевых пунктов дневника исследователя. Нажми «Сохранить черновик», а для официальной сдачи задания используй единую форму отправки ниже:
         </p>
 
         <div className="space-y-4">
@@ -204,14 +196,7 @@ ${bestPrompt}`;
             onClick={handleSaveLocal}
             className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs sm:text-sm transition-all flex items-center gap-2"
           >
-            <Copy className="w-4 h-4" /> {saved ? 'Сохранено!' : 'Сохранить черновик'}
-          </button>
-
-          <button
-            onClick={handleSubmitMentor}
-            className="px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs sm:text-sm transition-all shadow-lg shadow-cyan-500/20 flex items-center gap-2"
-          >
-            <Send className="w-4 h-4" /> {submittedToMentor ? '✓ Отправлено ментору!' : 'Отправить AI Дневник ментору (+50 XP)'}
+            <Copy className="w-4 h-4" /> {saved ? 'Сохранено в черновик!' : 'Сохранить черновик'}
           </button>
         </div>
       </div>
@@ -223,6 +208,7 @@ ${bestPrompt}`;
         <InlineHomeworkSubmission
           lessonId={1}
           homeworkTitle="Домашнее задание: Урок 1 (AI Дневник и рефлексия)"
+          defaultText={compiledJournal}
         />
       </div>
 

@@ -450,13 +450,13 @@ export function sanitizeQuizSubmission(q: any, userAccounts?: UserAccount[]): Qu
   } else if (/^BLOCK(?:_TEST)?[_-]?[1-6]$/i.test(quizId)) {
     const num = quizId.replace(/\D/g, '') || '1';
     quizId = `TEST_${num}`;
-  } else if (/^TEST_[1-6]$/i.test(quizId) && (cleanDetails?.length >= 15 || (q as any)?.totalQuestions >= 15 || String(q.quizTitle || q.quiz_title || '').includes('БЛОК') || String(q.quizTitle || q.quiz_title || '').includes('РУБЕЖН'))) {
+  } else if (/^TEST_[1-7]$/i.test(quizId)) {
     quizId = quizId.toUpperCase();
   } else if (/^\d+$/.test(quizId)) {
     const num = parseInt(quizId, 10);
     quizId = `LESSON_${num}`;
-  } else if (/^(?:LESSON|QUIZ|TEST)[_-]?(\d+)/i.test(quizId)) {
-    const m = quizId.match(/^(?:LESSON|QUIZ|TEST)[_-]?(\d+)/i);
+  } else if (/^(?:LESSON|LESSON_TEST|QUIZ)[_-]?(\d+)/i.test(quizId)) {
+    const m = quizId.match(/^(?:LESSON|LESSON_TEST|QUIZ)[_-]?(\d+)/i);
     const num = m ? parseInt(m[1], 10) : 1;
     quizId = `LESSON_${num}`;
   } else if (quizId.toUpperCase().startsWith('LESSON_')) {

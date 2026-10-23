@@ -63,11 +63,20 @@ export const QuizzesPage: React.FC = () => {
       return false;
     });
 
-    const scoreData = testScores[quizId] || (matchingSub ? {
-      scorePct: typeof matchingSub.scorePct === 'number' ? matchingSub.scorePct : (matchingSub.passed ? 100 : 0),
-      passed: Boolean(matchingSub.passed),
-      completedAt: matchingSub.submittedAt || ''
-    } : undefined);
+    const rawScoreVal = testScores[quizId];
+    const scoreData = typeof rawScoreVal === 'number'
+      ? {
+          scorePct: rawScoreVal,
+          passed: rawScoreVal >= 60,
+          completedAt: matchingSub?.submittedAt || ''
+        }
+      : (typeof rawScoreVal === 'object' && rawScoreVal !== null
+          ? rawScoreVal
+          : (matchingSub ? {
+              scorePct: typeof matchingSub.scorePct === 'number' ? matchingSub.scorePct : (matchingSub.passed ? 100 : 0),
+              passed: Boolean(matchingSub.passed),
+              completedAt: matchingSub.submittedAt || ''
+            } : undefined));
 
     const submission: QuizSubmissionResult = matchingSub || {
       id: `QUIZ-SUB-${quizId}-${(profile.id || 'USR-STU-01').replace(/[^a-zA-Z0-9]/g, '')}`,
@@ -106,12 +115,21 @@ export const QuizzesPage: React.FC = () => {
       (qsId && studentId && (qsId === studentId || qsId.toLowerCase() === studentId.toLowerCase()))
     );
   });
-  const finalExamScore = testScores['FINAL_EXAM'] || (finalExamSub ? {
-    scorePct: typeof finalExamSub.scorePct === 'number' ? finalExamSub.scorePct : (finalExamSub.passed ? 100 : 0),
-    passed: Boolean(finalExamSub.passed),
-    completedAt: finalExamSub.submittedAt || ''
-  } : undefined);
-  const finalExamPassed = finalExamScore?.passed;
+  const rawFinalScore = testScores['FINAL_EXAM'];
+  const finalExamScore = typeof rawFinalScore === 'number'
+    ? {
+        scorePct: rawFinalScore,
+        passed: rawFinalScore >= 60,
+        completedAt: finalExamSub?.submittedAt || ''
+      }
+    : (typeof rawFinalScore === 'object' && rawFinalScore !== null
+        ? rawFinalScore
+        : (finalExamSub ? {
+            scorePct: typeof finalExamSub.scorePct === 'number' ? finalExamSub.scorePct : (finalExamSub.passed ? 100 : 0),
+            passed: Boolean(finalExamSub.passed),
+            completedAt: finalExamSub.submittedAt || ''
+          } : undefined));
+  const finalExamPassed = Boolean(finalExamScore?.passed);
   const finalExamCanRetake = canRetakeQuiz('FINAL_EXAM');
 
   return (

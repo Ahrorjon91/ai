@@ -1060,13 +1060,7 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             (q.studentEmail && q.studentEmail.toLowerCase().trim() === activeEmailClean) ||
             (activeIdClean && q.studentId === activeIdClean)
         );
-        if (myQuizzes.length === 0) {
-          setTestScores({});
-          try {
-            localStorage.removeItem('devops_lesson1_quiz_submitted');
-            localStorage.removeItem('devops_lesson1_quiz_answers');
-          } catch {}
-        } else {
+        if (myQuizzes.length > 0) {
           const nextScores: Record<string, any> = {};
           myQuizzes.forEach((q) => {
             nextScores[q.quizId] = q.scorePct;
@@ -1080,7 +1074,7 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               nextScores[`LESSON_${lid}`] = q.scorePct;
             }
           });
-          setTestScores(nextScores);
+          setTestScores((prev) => ({ ...prev, ...nextScores }));
         }
       }
 
@@ -1156,7 +1150,10 @@ export const PortalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             ? userProgress.flatReadSections
             : {}),
         };
-        setReadSections(serverSections || {});
+        setReadSections((prev) => ({
+          ...prev,
+          ...(serverSections || {}),
+        }));
 
         const myApprovedHwLessons = hwList
           .filter(

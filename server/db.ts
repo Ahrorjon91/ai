@@ -848,8 +848,9 @@ export function saveAttachmentToSqlite(data: {
   const absoluteFilePath = path.join(targetDir, safeFilename);
 
   let buffer: Buffer;
-  if (data.fileBuffer && Buffer.isBuffer(data.fileBuffer)) {
-    buffer = data.fileBuffer;
+  const rawBuf = data.fileBuffer || (data as any).fileBlob;
+  if (rawBuf && (Buffer.isBuffer(rawBuf) || rawBuf instanceof Uint8Array)) {
+    buffer = Buffer.from(rawBuf);
   } else if (data.dataUrl) {
     const base64Data = data.dataUrl.includes(';base64,') ? data.dataUrl.split(';base64,').pop()! : data.dataUrl;
     buffer = Buffer.from(base64Data, 'base64');
@@ -898,18 +899,22 @@ export function saveAttachmentToSqlite(data: {
   return { id: attId, filePath: relativeFilePath, size: sizeFormatted };
 }
 
-export function restoreAttachmentFileToDisk(filePath: string): boolean {
+export function restoreAttachmentFileToDisk(identifier: string): boolean {
   try {
-    const cleanPath = filePath.replace(/^\/+/, '');
-    const absolutePath = path.join(process.cwd(), cleanPath);
-    if (fs.existsSync(absolutePath)) return true;
+    const cleanPath = identifier.replace(/^\/+/, '');
+    let absolutePath = path.join(process.cwd(), cleanPath);
+    if (fs.existsSync(absolutePath) && !fs.statSync(absolutePath).isDirectory()) return true;
 
     const row = queryOne(
-      `SELECT file_blob, name, data_url FROM attachments WHERE file_path = ? OR file_path LIKE ? LIMIT 1`,
-      [cleanPath, `%${path.basename(cleanPath)}`]
+      `SELECT file_blob, name, data_url, file_path FROM attachments WHERE id = ? OR file_path = ? OR file_path LIKE ? LIMIT 1`,
+      [identifier, cleanPath, `%${path.basename(cleanPath)}`]
     );
 
     if (row) {
+      const resolvedPath = row.file_path ? row.file_path.replace(/^\/+/, '') : cleanPath;
+      absolutePath = path.join(process.cwd(), resolvedPath);
+      if (fs.existsSync(absolutePath) && !fs.statSync(absolutePath).isDirectory()) return true;
+
       let buf: Buffer | null = null;
       if (row.file_blob && (Buffer.isBuffer(row.file_blob) || row.file_blob instanceof Uint8Array)) {
         buf = Buffer.from(row.file_blob);
@@ -924,7 +929,7 @@ export function restoreAttachmentFileToDisk(filePath: string): boolean {
           fs.mkdirSync(parentDir, { recursive: true });
         }
         fs.writeFileSync(absolutePath, buf);
-        console.log(`[SQLite Attachments] Restored file from database BLOB to disk: ${cleanPath}`);
+        console.log(`[SQLite Attachments] Restored file from database BLOB to disk: ${resolvedPath}`);
         return true;
       }
     }
@@ -1760,9 +1765,17 @@ export function getFullSnapshot(): any {
   }));
 
   const mappedHomework = homework.map((hw: any) => {
+    let attachedFiles: any[] = [];
+    if (hw.attached_files) {
+      try {
+        const parsed = typeof hw.attached_files === 'string' ? JSON.parse(hw.attached_files) : hw.attached_files;
+        if (Array.isArray(parsed)) attachedFiles = parsed;
+      } catch {}
+    }
     const rawStatus = hw.status || 'Submitted';
     const normStatus = rawStatus === 'Pending' || rawStatus === 'pending' ? 'Submitted' : rawStatus;
     const isApproved = normStatus === 'Approved';
+    const resolvedUrl = hw.file_url || hw.repo_url || hw.github_url || hw.demo_url || '';
     return {
       id: hw.id,
       lessonId: hw.lesson_id,
@@ -1771,10 +1784,11 @@ export function getFullSnapshot(): any {
       studentEmail: hw.student_email,
       reportText: hw.report_text || hw.student_notes || '',
       studentNotes: hw.student_notes || hw.report_text || '',
-      fileUrl: hw.file_url || hw.repo_url || hw.github_url || '',
-      repoUrl: hw.repo_url || hw.file_url || hw.github_url || '',
-      githubUrl: hw.github_url || hw.file_url || hw.repo_url || '',
-      demoUrl: hw.demo_url || '',
+      fileUrl: resolvedUrl,
+      repoUrl: hw.repo_url || resolvedUrl,
+      githubUrl: hw.github_url || resolvedUrl,
+      demoUrl: hw.demo_url || resolvedUrl,
+      attachedFiles,
       submittedAt: hw.submitted_at,
       status: normStatus,
       submissionStatus: normStatus,
@@ -1788,9 +1802,17 @@ export function getFullSnapshot(): any {
   });
 
   const mappedLabs = labs.map((l: any) => {
+    let attachedFiles: any[] = [];
+    if (l.attached_files) {
+      try {
+        const parsed = typeof l.attached_files === 'string' ? JSON.parse(l.attached_files) : l.attached_files;
+        if (Array.isArray(parsed)) attachedFiles = parsed;
+      } catch {}
+    }
     const rawStatus = l.status || l.submission_status || 'Submitted';
     const normStatus = rawStatus === 'Pending' || rawStatus === 'pending' ? 'Submitted' : rawStatus;
     const isApproved = normStatus === 'Approved';
+    const resolvedLabUrl = l.repo_url || l.file_url || l.demo_url || l.github_url || '';
     return {
       id: l.id,
       labId: l.lab_id,
@@ -1800,9 +1822,11 @@ export function getFullSnapshot(): any {
       studentEmail: l.student_email,
       reportText: l.report_text || l.student_notes || '',
       studentNotes: l.student_notes || l.report_text || '',
-      repoUrl: l.repo_url || l.file_url || l.demo_url || '',
-      fileUrl: l.file_url || l.repo_url || l.demo_url || '',
-      demoUrl: l.demo_url || l.repo_url || l.file_url || '',
+      repoUrl: resolvedLabUrl,
+      fileUrl: l.file_url || resolvedLabUrl,
+      demoUrl: l.demo_url || resolvedLabUrl,
+      githubUrl: resolvedLabUrl,
+      attachedFiles,
       submittedAt: l.submitted_at,
       status: normStatus,
       submissionStatus: normStatus,
@@ -1894,6 +1918,7 @@ export function getFullSnapshot(): any {
     faq,
     handbook,
     progress: progressMap,
+    studentProgress: progressMap,
     leaderboard,
     expHistory,
   };
