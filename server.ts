@@ -47,22 +47,26 @@ async function startServer() {
     );
 
     // Block direct HTTP access to server-side SQLite files and private server secrets
-    // Note: Do not block frontend src/data/ modules
+    // Note: Do not block frontend src/data/ modules or API routes
     const lowerPath = (req.path || '').toLowerCase();
+    const isApiRoute = lowerPath.startsWith('/api') || lowerPath.startsWith('/ai/api') || lowerPath.startsWith('/admin/api');
     if (
-      lowerPath.endsWith('.sqlite') ||
-      lowerPath.endsWith('.sqlite-wal') ||
-      lowerPath.endsWith('.sqlite-shm') ||
-      lowerPath.endsWith('.db') ||
-      lowerPath.endsWith('.db-wal') ||
-      lowerPath.endsWith('.db-shm') ||
-      lowerPath.startsWith('/server/data/') ||
-      lowerPath.includes('/server/db') ||
-      lowerPath.includes('.env') ||
-      lowerPath.includes('.git') ||
-      lowerPath.includes('session_secret') ||
-      lowerPath.includes('ecosystem.config') ||
-      lowerPath.endsWith('.key')
+      !isApiRoute &&
+      (
+        lowerPath.endsWith('.sqlite') ||
+        lowerPath.endsWith('.sqlite-wal') ||
+        lowerPath.endsWith('.sqlite-shm') ||
+        lowerPath.endsWith('.db') ||
+        lowerPath.endsWith('.db-wal') ||
+        lowerPath.endsWith('.db-shm') ||
+        lowerPath.startsWith('/server/data/') ||
+        lowerPath.includes('/server/db') ||
+        lowerPath.includes('.env') ||
+        lowerPath.includes('.git') ||
+        lowerPath.includes('session_secret') ||
+        lowerPath.includes('ecosystem.config') ||
+        lowerPath.endsWith('.key')
+      )
     ) {
       return res.status(403).json({ success: false, error: 'Access denied: sensitive resource' });
     }

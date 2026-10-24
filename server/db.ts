@@ -1069,14 +1069,14 @@ export function createDatabaseBackup(createdBy = 'system', reason = 'manual'): B
   };
 }
 
-function enforceBackupRetention(maxBackups = 15): void {
+export function enforceBackupRetention(maxBackups = 15): void {
   try {
     const all = query(`SELECT id, filename, filepath FROM database_backups ORDER BY created_at DESC`);
     if (all.length > maxBackups) {
       const toDelete = all.slice(maxBackups);
       for (const b of toDelete) {
         try {
-          if (fs.existsSync(b.filepath)) {
+          if (b.filepath && fs.existsSync(b.filepath)) {
             fs.unlinkSync(b.filepath);
           }
           run(`DELETE FROM database_backups WHERE id = ?`, [b.id]);
@@ -1089,8 +1089,159 @@ function enforceBackupRetention(maxBackups = 15): void {
   }
 }
 
+export function syncDiskBackupsWithTable(): void {
+  try {
+    if (!fs.existsSync(BACKUPS_DIR)) {
+      fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+      return;
+    }
+    const files = fs.readdirSync(BACKUPS_DIR);
+    for (const f of files) {
+      const lower = f.toLowerCase();
+      if (!lower.endsWith('.sqlite') && !lower.endsWith('.db') && !lower.endsWith('.sqlite3')) continue;
+      const fullPath = path.join(BACKUPS_DIR, f);
+      try {
+        const stat = fs.statSync(fullPath);
+        if (!stat.isFile() || stat.size < 100) continue;
+
+        const row = queryOne(
+          `SELECT id FROM database_backups WHERE filename = ? OR filepath = ? OR id = ? LIMIT 1`,
+          [f, fullPath, f.replace(/\.(sqlite|db|sqlite3)$/i, '')]
+        );
+        if (!row) {
+          const buf = fs.readFileSync(fullPath);
+          let recordsCount: Record<string, number> = {};
+          let status: 'Verified' | 'Error' = 'Verified';
+          let verificationResult = 'PRAGMA integrity_check passed successfully';
+
+          if (SQL) {
+            try {
+              const testDb = new SQL.Database(buf);
+              const integrityRes = testDb.exec('PRAGMA integrity_check');
+              if (
+                !integrityRes ||
+                integrityRes.length === 0 ||
+                !integrityRes[0].values ||
+                integrityRes[0].values[0][0] !== 'ok'
+              ) {
+                status = 'Error';
+                verificationResult = 'Integrity check failed: ' + JSON.stringify(integrityRes);
+              }
+              const countTable = (t: string) => {
+                try {
+                  const res = testDb.exec(`SELECT COUNT(*) FROM ${t}`);
+                  return res[0]?.values[0][0] !== undefined ? Number(res[0].values[0][0]) : 0;
+                } catch {
+                  return 0;
+                }
+              };
+              recordsCount = {
+                users: countTable('users'),
+                homework: countTable('homework_submissions'),
+                labs: countTable('lab_submissions'),
+                quizzes: countTable('quiz_submissions'),
+                progress: countTable('lessons_progress'),
+                attachments: countTable('attachments'),
+                certificates: countTable('certificates'),
+              };
+              testDb.close();
+            } catch (err: any) {
+              status = 'Error';
+              verificationResult = err?.message || 'Verification error';
+            }
+          }
+          const checksum = crypto.createHash('sha256').update(buf).digest('hex');
+          const backupId = f.replace(/\.(sqlite|db|sqlite3)$/i, '');
+          const createdAt = stat.mtime ? stat.mtime.toISOString() : new Date().toISOString();
+          run(
+            `INSERT OR REPLACE INTO database_backups (
+              id, filename, filepath, file_size_bytes, checksum, records_count, status, verification_result, created_at, created_by
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+            [
+              backupId,
+              f,
+              fullPath,
+              stat.size,
+              checksum,
+              JSON.stringify(recordsCount),
+              status,
+              verificationResult,
+              createdAt,
+              'system',
+            ]
+          );
+        }
+      } catch (err) {
+        console.warn('[syncDiskBackupsWithTable] Error syncing file:', f, err);
+      }
+    }
+
+    // Prune entries from DB that no longer exist on disk
+    const rows = query(`SELECT id, filename, filepath FROM database_backups`);
+    for (const r of rows) {
+      const exists =
+        (r.filepath && fs.existsSync(r.filepath)) ||
+        (r.filename && fs.existsSync(path.join(BACKUPS_DIR, r.filename)));
+      if (!exists) {
+        run(`DELETE FROM database_backups WHERE id = ?`, [r.id]);
+      }
+    }
+  } catch (err) {
+    console.warn('[syncDiskBackupsWithTable] Warning during backups sync:', err);
+  }
+}
+
+export function resolveBackupFilePath(backupIdOrFilename: string): string | null {
+  if (!backupIdOrFilename || typeof backupIdOrFilename !== 'string') return null;
+  const clean = path.basename(backupIdOrFilename.trim());
+
+  // 1. Direct path in BACKUPS_DIR
+  const directPath = path.join(BACKUPS_DIR, clean);
+  if (fs.existsSync(directPath) && fs.statSync(directPath).isFile()) return directPath;
+
+  // 2. Direct with extension
+  for (const ext of ['.sqlite', '.db', '.sqlite3']) {
+    const p = path.join(BACKUPS_DIR, `${clean}${ext}`);
+    if (fs.existsSync(p) && fs.statSync(p).isFile()) return p;
+  }
+
+  // 3. Query database_backups table
+  try {
+    const row = queryOne(
+      `SELECT filepath, filename FROM database_backups WHERE id = ? OR filename = ? LIMIT 1`,
+      [clean, clean]
+    );
+    if (row) {
+      if (row.filepath && fs.existsSync(row.filepath) && fs.statSync(row.filepath).isFile()) return row.filepath;
+      if (row.filename) {
+        const fromRowName = path.join(BACKUPS_DIR, row.filename);
+        if (fs.existsSync(fromRowName) && fs.statSync(fromRowName).isFile()) return fromRowName;
+      }
+    }
+  } catch {}
+
+  // 4. Scan BACKUPS_DIR for partial or case-insensitive match
+  if (fs.existsSync(BACKUPS_DIR)) {
+    const files = fs.readdirSync(BACKUPS_DIR);
+    for (const f of files) {
+      const baseNoExt = f.replace(/\.(sqlite|db|sqlite3)$/i, '');
+      if (
+        f.toLowerCase() === clean.toLowerCase() ||
+        baseNoExt.toLowerCase() === clean.toLowerCase() ||
+        f.toLowerCase().includes(clean.toLowerCase())
+      ) {
+        const p = path.join(BACKUPS_DIR, f);
+        if (fs.existsSync(p) && fs.statSync(p).isFile()) return p;
+      }
+    }
+  }
+
+  return null;
+}
+
 export function listDatabaseBackups(): BackupMetadata[] {
   try {
+    syncDiskBackupsWithTable();
     const rows = query(`SELECT * FROM database_backups ORDER BY created_at DESC`);
     return rows.map((r: any) => {
       let recordsCount: Record<string, number> = {};
@@ -1124,20 +1275,15 @@ export function verifyDatabaseBackup(backupIdOrFilename: string): {
   error?: string;
 } {
   try {
-    let targetPath = path.join(BACKUPS_DIR, backupIdOrFilename);
-    if (!fs.existsSync(targetPath)) {
-      const row = queryOne(
-        `SELECT filepath FROM database_backups WHERE id = ? OR filename = ? LIMIT 1`,
-        [backupIdOrFilename, backupIdOrFilename]
-      );
-      if (row && row.filepath && fs.existsSync(row.filepath)) {
-        targetPath = row.filepath;
-      } else {
-        return { success: false, integrity: 'File not found', tableCounts: {}, checksum: '', error: 'Файл резервной копии не найден на сервере' };
-      }
+    const targetPath = resolveBackupFilePath(backupIdOrFilename);
+    if (!targetPath || !fs.existsSync(targetPath)) {
+      return { success: false, integrity: 'File not found', tableCounts: {}, checksum: '', error: 'Файл резервной копии не найден на сервере' };
     }
 
     const buffer = fs.readFileSync(targetPath);
+    if (!SQL) {
+      return { success: false, integrity: 'SQL not ready', tableCounts: {}, checksum: '', error: 'SQL engine not initialized' };
+    }
     const testDb = new SQL.Database(buffer);
     const integrityRes = testDb.exec('PRAGMA integrity_check');
     const integrity =
@@ -1183,6 +1329,168 @@ export function verifyDatabaseBackup(backupIdOrFilename: string): {
   }
 }
 
+export function saveUploadedDatabaseBackup(
+  originalFileName: string,
+  buffer: Buffer,
+  adminEmail: string,
+  restoreImmediately: boolean = false
+): {
+  success: boolean;
+  backup?: BackupMetadata;
+  restored?: boolean;
+  restoredCounts?: Record<string, number>;
+  message: string;
+  error?: string;
+} {
+  try {
+    if (!buffer || buffer.length < 512) {
+      return { success: false, message: 'Файл базы данных слишком мал или пуст', error: 'Empty or corrupt file' };
+    }
+
+    // Verify SQLite 3 magic header ("SQLite format 3\0")
+    const magic = buffer.subarray(0, 16).toString('utf-8');
+    if (!magic.startsWith('SQLite format 3')) {
+      return {
+        success: false,
+        message: 'Загруженный файл не является допустимой базой данных SQLite 3 (отсутствует сигнатура "SQLite format 3")',
+        error: 'Invalid SQLite header'
+      };
+    }
+
+    if (!SQL) {
+      throw new Error('SQLite engine is not initialized');
+    }
+
+    // Verify database integrity
+    const testDb = new SQL.Database(buffer);
+    const integrityRes = testDb.exec('PRAGMA integrity_check');
+    if (
+      !integrityRes ||
+      integrityRes.length === 0 ||
+      !integrityRes[0].values ||
+      integrityRes[0].values[0][0] !== 'ok'
+    ) {
+      testDb.close();
+      return {
+        success: false,
+        message: 'Файл поврежден: PRAGMA integrity_check завершился с ошибкой',
+        error: 'Integrity check failed: ' + JSON.stringify(integrityRes)
+      };
+    }
+
+    const countTable = (t: string) => {
+      try {
+        const res = testDb.exec(`SELECT COUNT(*) FROM ${t}`);
+        return res[0]?.values[0][0] !== undefined ? Number(res[0].values[0][0]) : 0;
+      } catch {
+        return 0;
+      }
+    };
+
+    const recordsCount = {
+      users: countTable('users'),
+      homework: countTable('homework_submissions'),
+      labs: countTable('lab_submissions'),
+      quizzes: countTable('quiz_submissions'),
+      progress: countTable('lessons_progress'),
+      attachments: countTable('attachments'),
+      certificates: countTable('certificates'),
+    };
+    testDb.close();
+
+    if (!fs.existsSync(BACKUPS_DIR)) {
+      fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+    }
+
+    const ext = path.extname(originalFileName).toLowerCase() || '.sqlite';
+    const safeExt = ['.db', '.sqlite', '.sqlite3'].includes(ext) ? ext : '.sqlite';
+    const rawBase = path.basename(originalFileName, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `uploaded-${timestamp}-${rawBase || 'backup'}${safeExt}`;
+    const backupFilePath = path.join(BACKUPS_DIR, filename);
+    const backupId = filename.replace(/\.(sqlite|db|sqlite3)$/i, '');
+
+    fs.writeFileSync(backupFilePath, buffer);
+
+    const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
+    const fileSizeBytes = buffer.length;
+
+    run(
+      `INSERT OR REPLACE INTO database_backups (
+        id, filename, filepath, file_size_bytes, checksum, records_count, status, verification_result, created_at, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      [
+        backupId,
+        filename,
+        backupFilePath,
+        fileSizeBytes,
+        checksum,
+        JSON.stringify(recordsCount),
+        'Verified',
+        'PRAGMA integrity_check passed successfully',
+        new Date().toISOString(),
+        adminEmail || 'admin@devopspro.tech',
+      ]
+    );
+
+    try {
+      run(
+        `INSERT INTO audit_logs (user_email, action, details, timestamp) VALUES (?, 'UPLOAD_BACKUP', ?, ?);`,
+        [
+          adminEmail || 'admin@devopspro.tech',
+          `Загружен архив базы данных ${filename} (${(fileSizeBytes / 1024).toFixed(1)} KB, Пользователей: ${recordsCount.users})`,
+          new Date().toISOString(),
+        ]
+      );
+    } catch {}
+
+    const backupMeta: BackupMetadata = {
+      id: backupId,
+      filename,
+      filepath: backupFilePath,
+      fileSizeBytes,
+      fileSizeFormatted: `${(fileSizeBytes / 1024).toFixed(1)} KB`,
+      checksum,
+      recordsCount,
+      status: 'Verified',
+      verificationResult: 'PRAGMA integrity_check passed successfully',
+      createdAt: new Date().toISOString(),
+      createdBy: adminEmail || 'admin@devopspro.tech',
+    };
+
+    enforceBackupRetention();
+
+    if (restoreImmediately) {
+      const restoreRes = restoreDatabaseFromBackup(filename, adminEmail);
+      return {
+        success: restoreRes.success,
+        backup: backupMeta,
+        restored: restoreRes.success,
+        restoredCounts: restoreRes.restoredCounts || recordsCount,
+        message: restoreRes.success
+          ? `Файл ${filename} успешно загружен и применен в качестве активной базы данных!`
+          : `Файл загружен в бэкапы, но при восстановлении возникла ошибка: ${restoreRes.message}`,
+        error: restoreRes.error,
+      };
+    }
+
+    return {
+      success: true,
+      backup: backupMeta,
+      restored: false,
+      restoredCounts: recordsCount,
+      message: `Резервная копия "${filename}" успешно загружена и добавлена в список бэкапов!`,
+    };
+  } catch (err: any) {
+    console.error('[saveUploadedDatabaseBackup] Error:', err);
+    return {
+      success: false,
+      message: 'Ошибка при сохранении загруженной базы данных: ' + err?.message,
+      error: err?.message,
+    };
+  }
+}
+
 // ============================================================================
 // COMPLETE RESTORATION SYSTEM (With Automated Safety Rollback Snapshot)
 // ============================================================================
@@ -1191,23 +1499,24 @@ export function restoreDatabaseFromBackup(
   adminEmail: string
 ): { success: boolean; message: string; restoredCounts?: Record<string, number>; error?: string } {
   try {
-    let targetPath = path.join(BACKUPS_DIR, backupIdOrFilename);
-    if (!fs.existsSync(targetPath)) {
-      const row = queryOne(
-        `SELECT filepath, filename FROM database_backups WHERE id = ? OR filename = ? LIMIT 1`,
-        [backupIdOrFilename, backupIdOrFilename]
-      );
-      if (row && row.filepath && fs.existsSync(row.filepath)) {
-        targetPath = row.filepath;
-      } else {
-        return { success: false, message: 'Файл резервной копии не найден', error: 'Backup file does not exist' };
-      }
+    const targetPath = resolveBackupFilePath(backupIdOrFilename);
+    if (!targetPath || !fs.existsSync(targetPath)) {
+      return { success: false, message: 'Файл резервной копии не найден на сервере', error: 'Backup file does not exist' };
     }
 
     // 1. Verify target backup file before touching live database
     const fileBuffer = fs.readFileSync(targetPath);
-    if (fileBuffer.length < 100) {
+    if (fileBuffer.length < 512) {
       return { success: false, message: 'Файл резервной копии поврежден или пуст', error: 'Corrupt or empty backup file' };
+    }
+
+    const magic = fileBuffer.subarray(0, 16).toString('utf-8');
+    if (!magic.startsWith('SQLite format 3')) {
+      return { success: false, message: 'Файл не является валидной базой данных SQLite 3', error: 'Invalid SQLite header' };
+    }
+
+    if (!SQL) {
+      throw new Error('SQLite engine is not initialized');
     }
 
     const testDb = new SQL.Database(fileBuffer);
@@ -1274,7 +1583,11 @@ export function restoreDatabaseFromBackup(
       }
     } catch {}
 
-    // 6. Log audit event
+    // 6. Resynchronize database_backups table so all backup files on disk are registered!
+    syncDiskBackupsWithTable();
+    persistDb(true);
+
+    // 7. Log audit event
     const now = new Date().toISOString();
     try {
       run(

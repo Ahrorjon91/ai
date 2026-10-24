@@ -18,6 +18,9 @@ import {
   listDatabaseBackups,
   verifyDatabaseBackup,
   restoreDatabaseFromBackup,
+  saveUploadedDatabaseBackup,
+  resolveBackupFilePath,
+  syncDiskBackupsWithTable,
   saveAttachmentToSqlite,
   restoreAttachmentFileToDisk
 } from './db';
@@ -647,27 +650,60 @@ apiRouter.get(['/admin/database/backups', '/database/backups', '/sqlite/backups'
 apiRouter.get(['/admin/database/backups/:id/download', '/database/backups/:id/download'], requireAdmin, (req, res) => {
   try {
     const backupId = req.params.id;
-    if (backupId.includes('..') || backupId.includes('/') || backupId.includes('\\')) {
+    if (backupId.includes('..')) {
       return res.status(400).json({ success: false, error: 'Недопустимый идентификатор резервной копии' });
     }
-    const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
-    const backupsDir = path.join(dataDir, 'backups');
-    let targetPath = path.join(backupsDir, backupId);
-    if (!fs.existsSync(targetPath)) {
-      const row = queryOne(`SELECT filepath, filename FROM database_backups WHERE id = ? OR filename = ? LIMIT 1`, [backupId, backupId]);
-      if (row && row.filepath && fs.existsSync(row.filepath)) {
-        targetPath = row.filepath;
-      } else {
-        return res.status(404).json({ success: false, error: 'Файл резервной копии не найден на сервере' });
-      }
+    const targetPath = resolveBackupFilePath(backupId);
+    if (!targetPath || !fs.existsSync(targetPath)) {
+      return res.status(404).json({ success: false, error: 'Файл резервной копии не найден на сервере' });
     }
     res.setHeader('Content-Type', 'application/x-sqlite3');
     res.setHeader('Content-Disposition', `attachment; filename="${path.basename(targetPath)}"`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
     return res.sendFile(targetPath);
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// Upload .db / .sqlite backup file from local machine with optional immediate restore
+apiRouter.post(
+  ['/admin/database/upload-backup', '/database/upload-backup', '/sqlite/upload-backup', '/admin/upload-backup'],
+  requireAdmin,
+  (req, res) => {
+    try {
+      const caller = extractUserFromRequest(req);
+      const email = caller?.email || 'admin@devopspro.tech';
+      const fileName = String(
+        req.body?.fileName || req.body?.filename || req.body?.name || 'database_restore.db'
+      ).trim();
+      const rawData =
+        req.body?.fileData ||
+        req.body?.fileDataUrl ||
+        req.body?.fileBase64 ||
+        req.body?.dataUrl ||
+        req.body?.data ||
+        '';
+      const restoreImmediately = Boolean(req.body?.restoreImmediately);
+
+      if (!rawData || typeof rawData !== 'string') {
+        return res.status(400).json({ success: false, error: 'Данные файла .db не переданы или пусты' });
+      }
+
+      const b64 = rawData.includes(';base64,') ? rawData.split(';base64,').pop()! : rawData;
+      const buffer = Buffer.from(b64, 'base64');
+
+      const result = saveUploadedDatabaseBackup(fileName, buffer, email, restoreImmediately);
+      const updatedBackups = listDatabaseBackups();
+      return res.json({
+        ...result,
+        backups: updatedBackups,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || 'Ошибка загрузки базы данных' });
+    }
+  }
+);
 
 // Download attachment by ID or path with automatic SQLite BLOB recovery
 apiRouter.get(['/attachments/:id/download', '/attachments/download'], async (req, res) => {
@@ -744,7 +780,11 @@ apiRouter.post(['/admin/database/restore', '/database/restore', '/sqlite/restore
       return res.status(400).json({ success: false, error: 'Параметр backupId обязателен' });
     }
     const result = restoreDatabaseFromBackup(backupId, email);
-    return res.json(result);
+    const updatedBackups = listDatabaseBackups();
+    return res.json({
+      ...result,
+      backups: updatedBackups,
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }

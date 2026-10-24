@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { usePortal } from '../context/PortalContext';
 import {
   Settings,
@@ -18,7 +18,9 @@ import {
   Calendar,
   Clock,
   Archive,
-  ShieldAlert
+  ShieldAlert,
+  Upload,
+  UploadCloud
 } from 'lucide-react';
 import { api } from '../lib/api';
 
@@ -47,6 +49,16 @@ export const SettingsPage: React.FC = () => {
   const [backups, setBackups] = useState<any[]>([]);
   const [loadingBackups, setLoadingBackups] = useState(false);
   const [creatingBackup, setCreatingBackup] = useState(false);
+  const [uploadingBackup, setUploadingBackup] = useState(false);
+  const [downloadingBackupId, setDownloadingBackupId] = useState<string | null>(null);
+  const [uploadModal, setUploadModal] = useState<{
+    open: boolean;
+    fileName: string;
+    fileSizeFormatted: string;
+    base64Data: string;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [verifyingBackupId, setVerifyingBackupId] = useState<string | null>(null);
   const [verificationModal, setVerificationModal] = useState<{
     open: boolean;
@@ -130,6 +142,89 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const lowerName = file.name.toLowerCase();
+    if (!lowerName.endsWith('.db') && !lowerName.endsWith('.sqlite') && !lowerName.endsWith('.sqlite3')) {
+      setSyncStatus({ success: false, message: 'Выберите файл резервной копии базы данных с расширением .db или .sqlite' });
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const bytes = file.size;
+      const sizeFormatted =
+        bytes >= 1024 * 1024
+          ? `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+          : `${(bytes / 1024).toFixed(1)} KB`;
+      setUploadModal({
+        open: true,
+        fileName: file.name,
+        fileSizeFormatted: sizeFormatted,
+        base64Data: result
+      });
+    };
+    reader.readAsDataURL(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleConfirmUpload = async (restoreImmediately: boolean) => {
+    if (!uploadModal) return;
+    setUploadingBackup(true);
+    try {
+      const res = await api.uploadDatabaseBackup({
+        fileName: uploadModal.fileName,
+        fileData: uploadModal.base64Data,
+        restoreImmediately
+      });
+      if (res && res.success) {
+        setSyncStatus({
+          success: true,
+          message: res.message || (restoreImmediately ? 'База данных успешно загружена и восстановлена!' : 'Резервная копия успешно добавлена в список!')
+        });
+        setUploadModal(null);
+        await fetchBackups();
+        await fetchSqliteStats();
+        if (restoreImmediately) {
+          await refreshDatabase();
+          setRestoreSuccessModal({
+            open: true,
+            message: res.message || 'База данных успешно восстановлена из загруженного файла!',
+            restoredCounts: res.restoredCounts
+          });
+        }
+      } else {
+        setSyncStatus({ success: false, message: res?.error || res?.message || 'Ошибка загрузки файла базы данных' });
+      }
+    } catch (err: any) {
+      setSyncStatus({ success: false, message: err?.message || 'Ошибка загрузки файла базы данных' });
+    } finally {
+      setUploadingBackup(false);
+      setTimeout(() => setSyncStatus({}), 6000);
+    }
+  };
+
+  const handleDownloadBackup = async (b: any) => {
+    setDownloadingBackupId(b.id);
+    try {
+      await api.downloadDatabaseBackup(b.id, b.filename);
+      setSyncStatus({
+        success: true,
+        message: `Архив ${b.filename} успешно скачан на ваше устройство!`
+      });
+    } catch (err: any) {
+      setSyncStatus({
+        success: false,
+        message: err?.message || 'Ошибка скачивания резервной копии'
+      });
+    } finally {
+      setDownloadingBackupId(null);
+      setTimeout(() => setSyncStatus({}), 5000);
+    }
+  };
+
   const handleVerifyBackup = async (backup: any) => {
     setVerifyingBackupId(backup.id);
     try {
@@ -160,7 +255,8 @@ export const SettingsPage: React.FC = () => {
     if (!selectedBackupForRestore) return;
     setRestoringBackup(true);
     try {
-      const res = await api.restoreDatabase(selectedBackupForRestore.id);
+      const backupKey = selectedBackupForRestore.id || selectedBackupForRestore.filename;
+      const res = await api.restoreDatabase(backupKey);
       if (res && res.success) {
         setSelectedBackupForRestore(null);
         setRestoreSuccessModal({
@@ -399,7 +495,14 @@ export const SettingsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".db,.sqlite,.sqlite3"
+                className="hidden"
+                onChange={handleFileSelected}
+              />
               <button
                 onClick={handleCreateBackup}
                 disabled={creatingBackup}
@@ -408,10 +511,21 @@ export const SettingsPage: React.FC = () => {
                 <Archive className={`w-4 h-4 ${creatingBackup ? 'animate-spin' : ''}`} />
                 <span>{creatingBackup ? 'Создание копии...' : 'Создать бэкап сейчас'}</span>
               </button>
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingBackup}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-800/60 hover:border-cyan-500 font-bold text-xs flex items-center gap-2 transition-all shadow-lg shadow-cyan-900/20 cursor-pointer disabled:opacity-50"
+                title="Загрузить .db или .sqlite файл с локального компьютера для восстановления"
+              >
+                <Upload className={`w-4 h-4 ${uploadingBackup ? 'animate-bounce text-cyan-400' : 'text-cyan-400'}`} />
+                <span>{uploadingBackup ? 'Загрузка...' : 'Загрузить .db файл'}</span>
+              </button>
+
               <button
                 onClick={fetchBackups}
                 disabled={loadingBackups}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
+                className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
                 title="Обновить список бэкапов"
               >
                 <RefreshCw className={`w-4 h-4 ${loadingBackups ? 'animate-spin text-cyan-400' : ''}`} />
@@ -434,7 +548,7 @@ export const SettingsPage: React.FC = () => {
             ) : backups.length === 0 ? (
               <div className="p-6 rounded-2xl bg-slate-950/60 border border-slate-800 text-center space-y-3">
                 <Database className="w-8 h-8 text-slate-600 mx-auto" />
-                <p className="text-xs text-slate-400">Резервных копий пока нет. Нажмите «Создать бэкап сейчас» для создания первого архивного снимка.</p>
+                <p className="text-xs text-slate-400">Резервных копий пока нет. Нажмите «Создать бэкап сейчас» или «Загрузить .db файл» для загрузки архивного снимка.</p>
               </div>
             ) : (
               <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
@@ -486,15 +600,15 @@ export const SettingsPage: React.FC = () => {
                           <span>Проверить</span>
                         </button>
 
-                        <a
-                          href={api.getDatabaseBackupDownloadUrl(b.id)}
-                          download={b.filename}
-                          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        <button
+                          onClick={() => handleDownloadBackup(b)}
+                          disabled={downloadingBackupId === b.id}
+                          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                           title="Скачать архив .sqlite"
                         >
-                          <Download className="w-3.5 h-3.5 text-indigo-400" />
-                          <span>Скачать</span>
-                        </a>
+                          <Download className={`w-3.5 h-3.5 text-indigo-400 ${downloadingBackupId === b.id ? 'animate-bounce' : ''}`} />
+                          <span>{downloadingBackupId === b.id ? 'Скачивание...' : 'Скачать'}</span>
+                        </button>
 
                         <button
                           onClick={() => setSelectedBackupForRestore(b)}
@@ -758,6 +872,64 @@ export const SettingsPage: React.FC = () => {
             >
               Отлично
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* UPLOAD DATABASE CONFIRMATION MODAL */}
+      {/* ========================================================================= */}
+      {uploadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-lg p-6 rounded-3xl bg-slate-900 border border-cyan-800/80 space-y-5 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+              <div className="p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                <UploadCloud className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Загрузка Базы Данных (.db / .sqlite)</h3>
+                <p className="text-xs text-cyan-400 font-semibold">Файл с локального устройства готов к обработке</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
+              <p>
+                Вы выбрали локальный файл базы данных SQLite для загрузки на сервер:
+              </p>
+              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 font-mono text-cyan-300 space-y-1">
+                <div>Имя файла: <strong>{uploadModal.fileName}</strong></div>
+                <div>Размер: <strong>{uploadModal.fileSizeFormatted}</strong></div>
+              </div>
+              <p className="text-slate-400 text-[11px]">
+                Выберите желаемое действие: сохранить файл в список резервных копий (для восстановления в любое время) или немедленно восстановить рабочую базу данных из этого файла.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-2.5 pt-2">
+              <button
+                onClick={() => setUploadModal(null)}
+                disabled={uploadingBackup}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => handleConfirmUpload(false)}
+                disabled={uploadingBackup}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-indigo-600/30 disabled:opacity-50"
+              >
+                <Archive className={`w-4 h-4 ${uploadingBackup ? 'animate-spin' : ''}`} />
+                <span>Добавить в список бэкапов</span>
+              </button>
+              <button
+                onClick={() => handleConfirmUpload(true)}
+                disabled={uploadingBackup}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-rose-600/30 disabled:opacity-50"
+              >
+                <RotateCcw className={`w-4 h-4 ${uploadingBackup ? 'animate-spin' : ''}`} />
+                <span>Загрузить и Восстановить</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

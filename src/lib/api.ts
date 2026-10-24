@@ -229,6 +229,7 @@ const ACTION_ENDPOINT_MAP: Record<string, { path: string; method?: 'GET' | 'POST
   createDatabaseBackup: { path: '/admin/database/backup', method: 'POST' },
   getDatabaseBackups: { path: '/admin/database/backups', method: 'GET' },
   restoreDatabase: { path: '/admin/database/restore', method: 'POST' },
+  uploadDatabaseBackup: { path: '/admin/database/upload-backup', method: 'POST' },
 };
 
 /**
@@ -642,7 +643,86 @@ export const api = {
   // Automated & Manual Backups Engine
   createDatabaseBackup: (reason?: string) => apiRequest('createDatabaseBackup', { reason }, 'POST'),
   getDatabaseBackups: () => apiRequest('getDatabaseBackups', {}, 'GET'),
-  getDatabaseBackupDownloadUrl: (id: string) => `${getBackendApiUrl()}/admin/database/backups/${encodeURIComponent(id)}/download`,
+  getDatabaseBackupDownloadUrl: (id: string) => {
+    let token = '';
+    let email = '';
+    try {
+      token = localStorage.getItem('devops_auth_token') || '';
+      const p = localStorage.getItem('devops_auth_profile');
+      if (p) {
+        const obj = JSON.parse(p);
+        token = token || obj.sessionToken || obj.token || '';
+        email = obj.email || '';
+      }
+    } catch {}
+    const query = new URLSearchParams();
+    if (token) query.set('token', token);
+    if (email) query.set('adminEmail', email);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return `${getBackendApiUrl()}/admin/database/backups/${encodeURIComponent(id)}/download${qs}`;
+  },
+  downloadDatabaseBackup: async (backupId: string, filename?: string): Promise<void> => {
+    const primaryBasePath = getApiBasePath();
+    const endpointPath = `${primaryBasePath}/admin/database/backups/${encodeURIComponent(backupId)}/download`;
+    const authHeaders: Record<string, string> = {};
+    let activeToken = '';
+    let email = '';
+    try {
+      activeToken = localStorage.getItem('devops_auth_token') || '';
+      const rawProfile = localStorage.getItem('devops_auth_profile');
+      if (rawProfile) {
+        const p = JSON.parse(rawProfile);
+        activeToken = activeToken || p.sessionToken || p.token || '';
+        if (p.email) {
+          email = p.email;
+          authHeaders['X-User-Email'] = p.email;
+        }
+        if (p.role) authHeaders['X-User-Role'] = p.role;
+      }
+      if (activeToken) {
+        authHeaders['Authorization'] = `Bearer ${activeToken}`;
+        authHeaders['X-Session-Token'] = activeToken;
+      }
+    } catch {}
+
+    const queryParams = new URLSearchParams();
+    if (activeToken) queryParams.set('token', activeToken);
+    if (email) queryParams.set('adminEmail', email);
+    const qs = queryParams.toString() ? `?${queryParams.toString()}` : '';
+
+    const response = await fetch(`${endpointPath}${qs}`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/x-sqlite3, application/octet-stream, */*',
+        ...authHeaders,
+      },
+    });
+
+    if (!response.ok) {
+      let errStr = '';
+      try {
+        const errJson = await response.json();
+        errStr = errJson.error || errJson.message;
+      } catch {
+        errStr = await response.text();
+      }
+      throw new Error(errStr || `Ошибка скачивания резервной копии (${response.status})`);
+    }
+
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename || `${backupId}.sqlite`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(blobUrl);
+    }, 200);
+  },
+  uploadDatabaseBackup: (payload: { fileName: string; fileData: string; restoreImmediately?: boolean }) =>
+    apiRequest('uploadDatabaseBackup', payload, 'POST'),
   verifyDatabaseBackup: (id: string) => apiRequest(`admin/database/backups/${encodeURIComponent(id)}/verify`, {}, 'POST'),
   restoreDatabase: (backupId: string) => apiRequest('restoreDatabase', { backupId }, 'POST'),
 };
