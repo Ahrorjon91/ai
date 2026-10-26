@@ -1329,6 +1329,66 @@ export function verifyDatabaseBackup(backupIdOrFilename: string): {
   }
 }
 
+export function deleteDatabaseBackup(
+  backupIdOrFilename: string,
+  adminEmail: string = 'admin@devopspro.tech'
+): { success: boolean; message: string; filename?: string; error?: string } {
+  try {
+    if (!backupIdOrFilename || typeof backupIdOrFilename !== 'string') {
+      return { success: false, message: 'Идентификатор резервной копии не указан', error: 'Missing backup ID' };
+    }
+    const clean = path.basename(backupIdOrFilename.trim());
+    if (clean.includes('..') || clean === '/' || clean === '.') {
+      return { success: false, message: 'Недопустимое имя файла резервной копии', error: 'Invalid backup filename' };
+    }
+
+    const targetPath = resolveBackupFilePath(clean);
+    const resolvedFilename = targetPath ? path.basename(targetPath) : clean;
+
+    if (targetPath && fs.existsSync(targetPath)) {
+      try {
+        fs.unlinkSync(targetPath);
+      } catch (err: any) {
+        return { success: false, message: 'Ошибка при удалении файла с диска: ' + err.message, error: err.message };
+      }
+    }
+
+    // Delete record from database_backups
+    const cleanId = clean.replace(/\.(sqlite|db|sqlite3)$/i, '');
+    run(
+      `DELETE FROM database_backups WHERE id = ? OR filename = ? OR filepath = ? OR id = ?`,
+      [clean, resolvedFilename, targetPath || '', cleanId]
+    );
+
+    syncDiskBackupsWithTable();
+    persistDb(true);
+
+    try {
+      run(
+        `INSERT INTO audit_logs (user_email, action, details, timestamp) VALUES (?, 'DELETE_BACKUP', ?, ?);`,
+        [
+          adminEmail,
+          `Удалена резервная копия базы данных: ${resolvedFilename}`,
+          new Date().toISOString(),
+        ]
+      );
+    } catch {}
+
+    return {
+      success: true,
+      message: `Резервная копия "${resolvedFilename}" успешно удалена`,
+      filename: resolvedFilename
+    };
+  } catch (err: any) {
+    console.error('[deleteDatabaseBackup] Error:', err);
+    return {
+      success: false,
+      message: 'Ошибка при удалении резервной копии: ' + err?.message,
+      error: err?.message
+    };
+  }
+}
+
 export function saveUploadedDatabaseBackup(
   originalFileName: string,
   buffer: Buffer,

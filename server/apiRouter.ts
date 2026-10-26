@@ -21,6 +21,7 @@ import {
   saveUploadedDatabaseBackup,
   resolveBackupFilePath,
   syncDiskBackupsWithTable,
+  deleteDatabaseBackup,
   saveAttachmentToSqlite,
   restoreAttachmentFileToDisk
 } from './db';
@@ -665,6 +666,47 @@ apiRouter.get(['/admin/database/backups/:id/download', '/database/backups/:id/do
     return res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// Delete verified backup file safely
+apiRouter.delete(['/admin/database/backups/:id', '/database/backups/:id'], requireAdmin, (req, res) => {
+  try {
+    const caller = extractUserFromRequest(req);
+    const email = caller?.email || 'admin@devopspro.tech';
+    const backupId = req.params.id;
+    const result = deleteDatabaseBackup(backupId, email);
+    const updatedBackups = listDatabaseBackups();
+    return res.json({
+      ...result,
+      backups: updatedBackups,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Also support POST for delete (to guarantee reliability across proxies and environments)
+apiRouter.post(
+  ['/admin/database/backups/:id/delete', '/database/backups/:id/delete', '/admin/database/backups/delete', '/database/backups/delete', '/admin/deleteBackup', '/deleteBackup'],
+  requireAdmin,
+  (req, res) => {
+    try {
+      const caller = extractUserFromRequest(req);
+      const email = caller?.email || 'admin@devopspro.tech';
+      const backupId = req.params.id || req.body?.backupId || req.body?.id || req.body?.filename;
+      if (!backupId) {
+        return res.status(400).json({ success: false, error: 'Параметр backupId обязателен' });
+      }
+      const result = deleteDatabaseBackup(backupId, email);
+      const updatedBackups = listDatabaseBackups();
+      return res.json({
+        ...result,
+        backups: updatedBackups,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+);
 
 // Upload .db / .sqlite backup file from local machine with optional immediate restore
 apiRouter.post(

@@ -230,6 +230,7 @@ const ACTION_ENDPOINT_MAP: Record<string, { path: string; method?: 'GET' | 'POST
   getDatabaseBackups: { path: '/admin/database/backups', method: 'GET' },
   restoreDatabase: { path: '/admin/database/restore', method: 'POST' },
   uploadDatabaseBackup: { path: '/admin/database/upload-backup', method: 'POST' },
+  deleteDatabaseBackup: { path: '/admin/database/backups/delete', method: 'POST' },
 };
 
 /**
@@ -725,4 +726,6 @@ export const api = {
     apiRequest('uploadDatabaseBackup', payload, 'POST'),
   verifyDatabaseBackup: (id: string) => apiRequest(`admin/database/backups/${encodeURIComponent(id)}/verify`, {}, 'POST'),
   restoreDatabase: (backupId: string) => apiRequest('restoreDatabase', { backupId }, 'POST'),
+  deleteDatabaseBackup: (backupId: string) =>
+    apiRequest('deleteDatabaseBackup', { backupId, id: backupId }, 'POST'),
 };

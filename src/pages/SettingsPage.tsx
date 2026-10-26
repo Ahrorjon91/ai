@@ -70,6 +70,8 @@ export const SettingsPage: React.FC = () => {
   } | null>(null);
   const [selectedBackupForRestore, setSelectedBackupForRestore] = useState<any | null>(null);
   const [restoringBackup, setRestoringBackup] = useState(false);
+  const [backupToDelete, setBackupToDelete] = useState<any | null>(null);
+  const [deletingBackupId, setDeletingBackupId] = useState<string | null>(null);
   const [restoreSuccessModal, setRestoreSuccessModal] = useState<{
     open: boolean;
     message: string;
@@ -274,6 +276,37 @@ export const SettingsPage: React.FC = () => {
       setSyncStatus({ success: false, message: err?.message || 'Критическая ошибка восстановления' });
     } finally {
       setRestoringBackup(false);
+    }
+  };
+
+  const handleConfirmDeleteBackup = async () => {
+    if (!backupToDelete) return;
+    const bId = backupToDelete.id || backupToDelete.filename;
+    setDeletingBackupId(bId);
+    try {
+      const res = await api.deleteDatabaseBackup(bId);
+      if (res && res.success) {
+        setSyncStatus({
+          success: true,
+          message: res.message || `Резервная копия "${backupToDelete.filename}" успешно удалена!`,
+        });
+        setBackupToDelete(null);
+        await fetchBackups();
+        await fetchSqliteStats();
+      } else {
+        setSyncStatus({
+          success: false,
+          message: res?.error || res?.message || 'Не удалось удалить резервную копию',
+        });
+      }
+    } catch (err: any) {
+      setSyncStatus({
+        success: false,
+        message: err?.message || 'Ошибка удаления резервной копии',
+      });
+    } finally {
+      setDeletingBackupId(null);
+      setTimeout(() => setSyncStatus({}), 5000);
     }
   };
 
@@ -618,6 +651,16 @@ export const SettingsPage: React.FC = () => {
                           <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
                           <span>Восстановить</span>
                         </button>
+
+                        <button
+                          onClick={() => setBackupToDelete(b)}
+                          disabled={deletingBackupId === b.id}
+                          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-950/70 border border-slate-700/60 hover:border-rose-800/80 text-slate-400 hover:text-rose-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                          title="Удалить эту резервную копию"
+                        >
+                          <Trash2 className={`w-3.5 h-3.5 text-slate-400 hover:text-rose-400 ${deletingBackupId === b.id ? 'animate-spin' : ''}`} />
+                          <span>{deletingBackupId === b.id ? 'Удаление...' : 'Удалить'}</span>
+                        </button>
                       </div>
                     </div>
                   );
@@ -761,6 +804,60 @@ export const SettingsPage: React.FC = () => {
               >
                 <RotateCcw className={`w-4 h-4 ${restoringBackup ? 'animate-spin' : ''}`} />
                 <span>{restoringBackup ? 'Восстановление...' : 'Да, восстановить базу данных'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* DELETE BACKUP CONFIRMATION MODAL */}
+      {/* ========================================================================= */}
+      {backupToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md p-6 rounded-3xl bg-slate-900 border border-rose-800/70 space-y-4 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
+              <div className="p-2.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Удаление Резервной Копии</h3>
+                <p className="text-xs text-rose-400">Окончательное удаление файла бэкапа</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Вы действительно хотите безвозвратно удалить файл резервной копии?
+            </p>
+
+            <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 font-mono text-xs text-slate-200 space-y-1">
+              <div className="truncate">Файл: <strong className="text-rose-300">{backupToDelete.filename}</strong></div>
+              <div className="text-[11px] text-slate-400">Размер: <span className="text-indigo-300">{backupToDelete.fileSizeFormatted}</span></div>
+              <div className="text-[11px] text-slate-400">Создан: {new Date(backupToDelete.createdAt).toLocaleString('ru-RU')}</div>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-rose-950/40 border border-rose-800/40 flex items-start gap-2.5 text-[11px] text-rose-300">
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <span>
+                Файл будет удален с диска сервера. Это действие необратимо.
+              </span>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-1">
+              <button
+                onClick={() => setBackupToDelete(null)}
+                disabled={Boolean(deletingBackupId)}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleConfirmDeleteBackup}
+                disabled={Boolean(deletingBackupId)}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-lg shadow-rose-600/30 cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 className={`w-4 h-4 ${deletingBackupId ? 'animate-spin' : ''}`} />
+                <span>{deletingBackupId ? 'Удаление...' : 'Да, удалить бэкап'}</span>
               </button>
             </div>
           </div>
